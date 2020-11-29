@@ -5,7 +5,7 @@ Library,Python Package,Category
  LightGBM,lightgbm,Traditional
  CatBoost,catboost,Traditional
  TensorFlow,tensorflow,Deep Learning
- Keras,tensorflow.keras,Deep Learning
+ Keras,keras,Deep Learning
  PyTorch,pytorch,Deep Learning
  Theano,theano,Deep Learning
  Caffe,caffe,Deep Learning

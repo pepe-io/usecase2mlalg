@@ -1,3 +1,4 @@
+Term,Slug
 machine learning,ML
 artificial intelligence,AI
 neural network,NN
@@ -11,13 +12,13 @@ model,
 train,
 ground truth,
 neuron,
-artificial neural networks,ANN
+artificial neural network,ANN
 layer,
 activation function,
 loss,
 deep learning,DL
-Convolutional Neural Networks,CNN
-Recurrent Neural Networks,RNN
+Convolutional Neural Network,CNN
+Recurrent Neural Network,RNN
 fitting,
 epoch,
 decision tree,
