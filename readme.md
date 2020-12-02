@@ -2,7 +2,9 @@
 
 this repository contains scripts to batch download & analyse ML git repositories
 
-## Scripts
+# Scripts
+
+## Github Projects
 
 ### 01_database_info.ipynb
 
@@ -31,3 +33,9 @@ this repository contains scripts to batch download & analyse ML git repositories
 ### 07_visualize_collected_data.ipynb
 
 - visualize obtained meta-data
+
+## mlart.co
+
+### 10_mlart_co-scraper.ipynb
+
+- scrape all items & item details from mlart.co and bundle them into a single .csv
