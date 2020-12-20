@@ -1,93 +1,85 @@
-Term,Slug
-machine learning,ML
-artificial intelligence,AI
-neural network,NN
-predict,
-label,
-rank,
-filter,
-regression,
-classification,
-model,
-train,
-ground truth,
-neuron,
-artificial neural network,ANN
-layer,
-activation function,
-loss,
-deep learning,DL
-Convolutional Neural Network,CNN
-Recurrent Neural Network,RNN
-fitting,
-epoch,
-decision tree,
-recognition,
-recommend,
-input layer,
-output layer,
-hidden layer,
-autoencoder,
-Bayesian,
-Federated learning,
-Automated machine learnin,AutoML
-Propagation,
-Gradient Descent,
-Gradient Boosting,GBM
-K-Means,
-Generative Adversarial Network,GAN
-Natural Language Processing,NLP
-Text Classification,
-Text Ranking,
-Sentiment Analysis,
-Document Summarization,
-Named Entity Recognition,NER
-Speech Recognition,
-Natural Language,
-Understanding,NLU
-Generation,NLG
-Machine Translation,
-chatbot,
-virtual assistant,
-Training data,
-Validation data,
-Test data,
-Computer Vision,CV
-Image classification,
-Object detection,
-Image segmentation,
-Saliency detection,
-Supervised learning,
-labeled,
-Unsupervised learning,
-unlabeled,
-clustering,
-Reinforcement learning,RL
-reward,
-Supervised learning,
-Unsupervised learning,
-Reinforcement learning,
-classification,
-Anomaly detection,
-Regression,
-Clustering,
-Linear regression,
-Logistic regression,
-Naive Bayes,
-Support Vector Machines,
-Decision Tree,
-K-Nearest neighbor,
-Random forest,
-Gradient boosting,
-K-Means,
-ResNet,
-R-CNN,
-Pix2Pix,
-U-Net,
-VGG,
-AlexNet,
-LSTM,
-ReLu,
-Rectifier,
-GRU,
-Boltzmann Machine,
+Term,Slug,Tag
+activation function,,
+alexnet,,AlexNet
+anomaly,,
+anomaly detection,,Anomaly Detection
+artificial intelligence,AI,AI
+artificial neural network,ANN,ANN
+autoencoder,,
+automated machine learning,AutoML,AutoML
+bayesian,,Bayesian
+boltzmann machine,,Boltzmann Machine
+chatbot,,Chatbot
+classif,,Classification
+clustering,,Clustering
+computer vision,CV,CV
+convolutional neural network,CNN,CNN
+decision tree,,Decision Tree
+deep learning,DL,DL
+detect,,
+document summarization,,Document Summarization
+epoch,,
+federated learning,,Federated Learning
+filter,,
+fit,,
+generative adversarial network,GAN,GAN
+gradient boosting machine,GBM,GBM
+gradient boosting,,Gradient Boosting
+gradient descent,,
+ground truth,,
+gru,,GRU
+hidden layer,,
+image classification,,
+image segmentation,,Image Segmentation
+input layer,,
+k-means,,K-Means
+k-nearest neighbor,KNN,KNN
+label,,
+layer,,
+linear regression,,Linear Regression
+logistic regression,,Logistic Regression
+loss,,
+lstm,,LSTM
+machine learning,ML,ML
+machine translation,,Machine Translation
+model,,
+naive bayes,,Naive Bayes
+named entity recognition,NER,NER
+natural language generation,NLG,NLG
+natural language processing,NLP,NLP
+natural language understanding,NLU,NLU
+neural network,NN,NN
+neuron,,
+object detection,,Object Detection
+output layer,,
+pix2pix,,Pix2Pix
+predict,,
+propagation,,
+random forest,,Random Forest
+rank,,
+recogn,,
+recommend,,Recommender
+recommender,,Recommender
+rectifier,,Rectifier
+recurrent neural network,RNN,RNN
+regression,,Regression
+reinforcement learning,RL,RL
+relu,,ReLu
+resnet,,ResNet
+reward,,
+saliency detection,,Saliency Detection
+sentiment analysis,,Sentiment Analysis
+speech recognition,,Speech Recognition
+supervised learning,,Supervised Learning
+support vector machines,,Support Vector Machines
+test data,,
+text classification,,Text Classification
+text ranking,,Text Ranking
+train,,
+training data,,
+u-net,,U-Net
+unlabeled,,
+unsupervised learning,,Unsupervised learning
+validation data,,
+vgg,,VGG
+virtual assistant,,Virtual Assistant

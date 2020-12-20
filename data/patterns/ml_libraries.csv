@@ -1,48 +1,48 @@
 Library,Python Package,Category
- SciKit-learn,sklearn,Traditional
- Statsmodels,statsmodels,Traditional
- XGBoost,xgboost,Traditional
- LightGBM,lightgbm,Traditional
- CatBoost,catboost,Traditional
- TensorFlow,tensorflow,Deep Learning
- Keras,keras,Deep Learning
- PyTorch,pytorch,Deep Learning
- Theano,theano,Deep Learning
- Caffe,caffe,Deep Learning
- Apache MXNet,mxnet,Deep Learning
- Pylearn 2,pylearn2,Deep Learning
- NLTK,nltk,NLP
- Spacy,spacy,NLP
- Standford CoreNLP,stanza,NLP
- Gensim,gensim,NLP
- TextBlob,textblob,NLP
- Quepy,quepy,NLP
- PyNLPl,PyNLPl,NLP
- pattern,pattern,NLP
- Vocabulary,vocabulary,NLP
- OpenCV,opencv-python,Computer Vision
- Scikit-image,skimage,Computer Vision
- SimplelTK,SimpleITK,Computer Vision
- Pillow,Pillow,Computer Vision
- SimpleCV,SimpleCV,Computer Vision
- OpenFace,openface,Computer Vision
- PyTorchCV,pytorchcv,Computer Vision
- face_recognition,face_recognition,Computer Vision
-  dockerface,py-faster-rcnn,Computer Vision
- Detectron,detectron,Computer Vision
-  albumentations,albumentations,Computer Vision
- pytessarct,pytessarct,Computer Vision
- imutils,imutils,Computer Vision
- Pyqlearning,pyqlearning,Reinforcement Learning
- KerasRL,keras-rl,Reinforcement Learning
- Tensorforce,tensorforce,Reinforcement Learning
- MAME RL,MAMEToolkit,Reinforcement Learning
- MushroomRL,mushroom_rl,Reinforcement Learning
- ChainerRL,chainerrl,Reinforcement Learning
- RL_Coach,rl_coach,Reinforcement Learning
- H2O AutoML,h2o,Others
- Auto-Keras,autokeras,Others
- TPOT,tpot,Others
- MLBox,mlbox,Others
- Auto-SKLearn,autosklearn,Others
- TransmogrifAI,com.salesforce.op,Others
+SciKit-learn,sklearn,Traditional
+Statsmodels,statsmodels,Traditional
+XGBoost,xgboost,Traditional
+LightGBM,lightgbm,Traditional
+CatBoost,catboost,Traditional
+TensorFlow,tensorflow,Deep Learning
+Keras,keras,Deep Learning
+PyTorch,pytorch,Deep Learning
+Theano,theano,Deep Learning
+Caffe,caffe,Deep Learning
+Apache MXNet,mxnet,Deep Learning
+Pylearn 2,pylearn2,Deep Learning
+NLTK,nltk,NLP
+Spacy,spacy,NLP
+Standford CoreNLP,stanza,NLP
+Gensim,gensim,NLP
+TextBlob,textblob,NLP
+Quepy,quepy,NLP
+PyNLPl,PyNLPl,NLP
+pattern,pattern,NLP
+Vocabulary,vocabulary,NLP
+OpenCV,opencv-python,Computer Vision
+Scikit-image,skimage,Computer Vision
+SimplelTK,SimpleITK,Computer Vision
+Pillow,Pillow,Computer Vision
+SimpleCV,SimpleCV,Computer Vision
+OpenFace,openface,Computer Vision
+PyTorchCV,pytorchcv,Computer Vision
+face_recognition,face_recognition,Computer Vision
+dockerface,py-faster-rcnn,Computer Vision
+Detectron,detectron,Computer Vision
+albumentations,albumentations,Computer Vision
+pytessarct,pytessarct,Computer Vision
+imutils,imutils,Computer Vision
+Pyqlearning,pyqlearning,Reinforcement Learning
+KerasRL,keras-rl,Reinforcement Learning
+Tensorforce,tensorforce,Reinforcement Learning
+MAME RL,MAMEToolkit,Reinforcement Learning
+MushroomRL,mushroom_rl,Reinforcement Learning
+ChainerRL,chainerrl,Reinforcement Learning
+RL_Coach,rl_coach,Reinforcement Learning
+H2O AutoML,h2o,Others
+Auto-Keras,autokeras,Others
+TPOT,tpot,Others
+MLBox,mlbox,Others
+Auto-SKLearn,autosklearn,Others
+TransmogrifAI,com.salesforce.op,Others
