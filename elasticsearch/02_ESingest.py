@@ -31,7 +31,7 @@ embed = hub.load("./.USE4/")
 
 
 def str_to_list(s):
-    s = s.replace("'", "").replace(' ', '').replace(
+    s = s.replace("'", "").replace(' ,', ',').replace(
         '[', '').replace(']', '').split(',')
     s = [i for i in s if i]
     return s
@@ -57,7 +57,7 @@ def mapper(row, style):
             # 'category_score': 0,
             # 'subcategory': '',
             # 'subcategory_score': 0,
-            'tags': str_to_list(row['tags']) + str_to_list(row['tags']),
+            'tags': list(set(str_to_list(row['tags']) + str_to_list(row['tags']))),
             'kind': 'project',
             'ml_libs': str_to_list(row['ml_libs']),
             'host': 'www.kaggle.com',
@@ -84,7 +84,7 @@ def mapper(row, style):
             'subcategory': row['type'],
             'subcategory_score': subcat_score,
             'tags': str_to_list(row['ml_tags']),
-            'kind': 'project',
+            'kind': 'Project',
             'ml_libs': str_to_list(row['ml_libs']),
             'host': 'www.github.com',
             'license': row['license'],
@@ -99,17 +99,18 @@ def mapper(row, style):
     # mlart mapping
     if style == 'mlart':
         title = row['Title'] if row['Title'] != '' else row['title']
-        subcat_score = 1 if row['Theme'] != '' else 0
+        cat_score = 1 if row['Theme'] != '' else 0
+        subcat_score = 1 if row['Medium'] != '' else 0
         return {
             'title': title,
             'description': row['subtitle'],
             'link': row['url'],
-            'category': 'Art',
-            'category_score': 1,
-            'subcategory': row['Theme'],
+            'category': str_to_list(row['Theme']),
+            'category_score': cat_score,
+            'subcategory': str_to_list(row['Medium']),
             'subcategory_score': subcat_score,
             'tags': str_to_list(row['Technology']),
-            'kind': ['Showcase'] + str_to_list(row['Medium']),
+            'kind': 'Showcase',
             # 'ml_libs': [],
             'host': 'mlart.co',
             # 'license': '',
