@@ -11,6 +11,7 @@ from elasticsearch import Elasticsearch
 import tensorflow as tf
 import tensorflow_hub as hub
 
+'''
 # configure db
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///usecase2ml.db'
@@ -41,6 +42,7 @@ class Record(db.Model):
 
 # create db with table if not present
 db.create_all()
+'''
 
 # connect to ES on localhost on port 9200
 print('##################################################')
