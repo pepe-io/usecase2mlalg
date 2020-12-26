@@ -3,46 +3,14 @@ from flask import Flask, render_template, request
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import json
-# import time
 import sys
-# import csv
 from elasticsearch import Elasticsearch
 # from elasticsearch.helpers import bulk
 import tensorflow as tf
 import tensorflow_hub as hub
 
-'''
-# configure db
+# define flask app
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///usecase2ml.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
-
-# configure table
-
-
-class Record(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(256))
-    link = db.Column(db.String(256), nullable=False)
-    category = db.Column(db.String(256))
-    subcategory = db.Column(db.String(256))
-    description = db.Column(db.Text())
-    tags = db.Column(db.String(256))
-    date_project = db.Column(db.DateTime)
-    date_scraped = db.Column(db.DateTime)
-    kind = db.Column(db.String(64))
-    libraries = db.Column(db.String(256))
-    score = db.Column(db.Float())
-    score_raw = db.Column(db.String(256))
-
-    def __repr__(self):
-        return '<Record %r>' % self.id
-
-
-# create db with table if not present
-db.create_all()
-'''
 
 # connect to ES on localhost on port 9200
 print('##################################################')
@@ -63,7 +31,10 @@ print('##################################################')
 embed = hub.load('./.USE4/')
 
 
-def keywordSearch(es, q, tag):
+def keySearch(es, queries):
+    '''
+    Search by Keyword, td-idf
+    '''
     # Search by Keywords
     # b = {
     #     'size': 1,
@@ -74,23 +45,6 @@ def keywordSearch(es, q, tag):
     #     }
     # }
 
-    b = {
-        "size": 10,
-        "query": {
-            "bool": {
-                "must": [
-                    {"match": {tag: q}}
-                ]
-            }
-        }
-    }
-
-    res = es.search(index='usecase2mlalg', body=b)
-
-    return res
-
-
-def keySearch(es, queries):
     q = {}
     for tag in queries:
         q.update({"match": {tag: queries[tag]}})
@@ -104,39 +58,14 @@ def keySearch(es, queries):
             }
         }
     }
-    # print(b)
-
     res = es.search(index='usecase2mlalg', body=b)
-    return res
-
-
-def sentenceSimilaritybyNN(es, sent, tag):
-    # Search by Vec Similarity
-    query_vector = tf.make_ndarray(
-        tf.make_tensor_proto(embed([sent]))).tolist()[0]
-    b = {
-        'size': 10,
-        'query': {
-            'script_score': {
-                'query': {
-                    'match_all': {}
-                },
-                'script': {
-                    'source': 'cosineSimilarity(params.query_vector, "'+tag+'") + 1.0',
-                    'params': {'query_vector': query_vector}
-                }
-            }
-        }
-    }
-
-    # print(json.dumps(b,indent=4))
-    res = es.search(index='usecase2mlalg', body=b)
-
     return res
 
 
 def semSearch(es, sent, tag_, queries):
-    # Search by Vec Similarity
+    '''
+    Search by Vec Similarity
+    '''
     query_vector = tf.make_ndarray(
         tf.make_tensor_proto(embed([sent]))).tolist()[0]
     q = {}
@@ -186,6 +115,9 @@ def semSearch(es, sent, tag_, queries):
 
 
 def format_result(res, extra={}):
+    '''
+    parse formatting for layout
+    '''
     ret = {}
     # if len(extra) > 0:
     ret['id'] = res['_id']
@@ -200,6 +132,10 @@ def format_result(res, extra={}):
 
 
 def bundle_results(items):
+    '''
+    bundle query-results
+    similar result by engine get grouped together
+    '''
     ret = []
     ids = []
 
@@ -217,41 +153,40 @@ def bundle_results(items):
     return ret
 
 
-@ app.route('/test', methods=['POST', 'GET'])
-# test route
-def test():
-    print(request.method)
-    print(request.form['search'])
-    return request.method
-
-
 @ app.route('/', methods=['GET', 'POST'])
 @ app.route('/<query>', methods=['GET'])
 # index / search route
 def search(query=''):
+    '''
+    index / search route
+    '''
+    # get query from POST
     if request.method == 'POST':
         q = request.form['search']
 
+    # get query from GET
     if request.method == 'GET':
         q = query.replace('+', ' ')
 
-    # print(request.form.get('kt'))
-    # print(request.form.get('kd'))
-
+    # items for view
     items = []
 
+    # filters are stored as queries
     queries = {}
+    # query engines and their html-from-counterpart
     query_engines = {
         'kt': ' checked',
         'st': ' checked',
         'kd': ' checked',
         'sd': ' checked',
     }
+    # css-attribute to hide filters (default value)
     show_filter = 'hidden'
 
     if q != '':
         i = 0
 
+        # add filters to tags
         if request.form.get('tags'):
             queries['tags'] = request.form.get('tags')
             show_filter = ''
@@ -264,6 +199,7 @@ def search(query=''):
 
         # print(queries)
 
+        # perform keyword search for title
         if request.form.get('kt'):
             query_engines['kt'] = ' checked'
             # res_kw = keywordSearch(es, q, 'title')
@@ -275,6 +211,7 @@ def search(query=''):
         else:
             query_engines['kt'] = ''
 
+        # perform keyword search for description
         if request.form.get('kd'):
             query_engines['kd'] = ' checked'
             # res_kw = keywordSearch(es, q, 'description')
@@ -286,6 +223,7 @@ def search(query=''):
         else:
             query_engines['kd'] = ''
 
+        # perform semantic search for title
         if request.form.get('st'):
             query_engines['st'] = ' checked'
             # res_semantic = sentenceSimilaritybyNN(es, q, 'title_vector')
@@ -297,6 +235,7 @@ def search(query=''):
         else:
             query_engines['st'] = ''
 
+        # perform semantic search for description
         if request.form.get('sd'):
             query_engines['sd'] = ' checked'
             #res_semantic = sentenceSimilaritybyNN(es, q, 'description_vector')
@@ -308,10 +247,11 @@ def search(query=''):
         else:
             query_engines['sd'] = ''
 
-    # print(items)
+    # bundle items (similar matches by engine get grouped together)
     items = bundle_results(items)
     # print(items)
 
+    # return view
     queries['query'] = q
     return render_template('index.html', query=queries, query_engines=query_engines, items=items, show_filter=show_filter)
 
