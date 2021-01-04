@@ -12,6 +12,12 @@ import tensorflow_hub as hub
 # define flask app
 app = Flask(__name__)
 
+# activate ENV
+# activate env
+# source env/bin/activate				# mac
+# source \env\Scripts\activate.bat	    # win
+# .\env\Scripts\activate				# win10
+
 # connect to ES on localhost on port 9200
 print('##################################################')
 print('Connecting to Elasticsearch...')
