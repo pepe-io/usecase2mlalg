@@ -1,9 +1,10 @@
 # imports
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, send_from_directory, Response
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import json
 import sys
+import os
 from elasticsearch import Elasticsearch
 # from elasticsearch.helpers import bulk
 import tensorflow as tf
@@ -64,6 +65,7 @@ def keySearch(es, queries):
             }
         }
     }
+    print(b)
     res = es.search(index='usecase2mlalg', body=b)
     return res
 
@@ -125,7 +127,6 @@ def format_result(res, extra={}):
     parse formatting for layout
     '''
     ret = {}
-    # if len(extra) > 0:
     ret['id'] = res['_id']
     ret['search_score'] = res['_score']
     ret.update(res['_source'])
@@ -159,26 +160,68 @@ def bundle_results(items):
     return ret
 
 
-@ app.route('/', methods=['GET', 'POST'])
-@ app.route('/<query>', methods=['GET'])
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
+
+@ app.route('/', methods=['GET', 'POST'], endpoint='gui')
+@ app.route('/api', methods=['GET'], endpoint='api')
+# @ app.route('/<query>', methods=['GET'], endpoint='api')
 # index / search route
 def search(query=''):
     '''
     index / search route
     '''
-    # get query from POST
-    if request.method == 'POST':
-        q = request.form['search']
 
-    # get query from GET
-    if request.method == 'GET':
-        q = query.replace('+', ' ')
+    # print entry point
+    print(request.endpoint)
+
+    # search query
+    q = ''
 
     # items for view
     items = []
 
     # filters are stored as queries
     queries = {}
+
+    # get query from POST
+    if request.method == 'POST':
+        q = request.form['search']
+
+        # add filters to tags
+        if request.form.get('tags'):
+            queries['tags'] = request.form.get('tags')
+            show_filter = ''
+        if request.form.get('kind'):
+            queries['kind'] = request.form.get('kind')
+            show_filter = ''
+        if request.form.get('ml_libs'):
+            queries['ml_libs'] = request.form.get('ml_libs')
+            show_filter = ''
+
+    # get query from GET
+    api_q_engine = []
+    if request.method == 'GET':
+        if 'q' in request.args:
+            q = request.args.get('q')
+
+        if 'engine' in request.args:
+            api_q_engine = request.args.get('engine').split(' ')
+        else:
+            api_q_engine = ['kt']
+
+        # add filters to tags
+        if 'tags' in request.args:
+            queries['tags'] = request.args.get('tags')
+
+        if 'kind' in request.args:
+            queries['kind'] = request.args.get('kind')
+
+        if 'ml_libs' in request.args:
+            queries['ml_libs'] = request.args.get('ml_libs')
+
     # query engines and their html-from-counterpart
     query_engines = {
         'kt': ' checked',
@@ -192,21 +235,10 @@ def search(query=''):
     if q != '':
         i = 0
 
-        # add filters to tags
-        if request.form.get('tags'):
-            queries['tags'] = request.form.get('tags')
-            show_filter = ''
-        if request.form.get('kind'):
-            queries['kind'] = request.form.get('kind')
-            show_filter = ''
-        if request.form.get('libs'):
-            queries['ml_libs'] = request.form.get('libs')
-            show_filter = ''
-
         # print(queries)
 
         # perform keyword search for title
-        if request.form.get('kt'):
+        if request.form.get('kt') or 'kt' in api_q_engine:
             query_engines['kt'] = ' checked'
             # res_kw = keywordSearch(es, q, 'title')
             res_kw = keySearch(es, dict({'title': q}, **queries))
@@ -218,7 +250,7 @@ def search(query=''):
             query_engines['kt'] = ''
 
         # perform keyword search for description
-        if request.form.get('kd'):
+        if request.form.get('kd') or 'kd' in api_q_engine:
             query_engines['kd'] = ' checked'
             # res_kw = keywordSearch(es, q, 'description')
             res_kw = keySearch(es, dict({'description': q}, **queries))
@@ -230,7 +262,7 @@ def search(query=''):
             query_engines['kd'] = ''
 
         # perform semantic search for title
-        if request.form.get('st'):
+        if request.form.get('st') or 'st' in api_q_engine:
             query_engines['st'] = ' checked'
             # res_semantic = sentenceSimilaritybyNN(es, q, 'title_vector')
             res_semantic = semSearch(es, q, 'title_vector', queries)
@@ -242,7 +274,7 @@ def search(query=''):
             query_engines['st'] = ''
 
         # perform semantic search for description
-        if request.form.get('sd'):
+        if request.form.get('sd') or 'sd' in api_q_engine:
             query_engines['sd'] = ' checked'
             #res_semantic = sentenceSimilaritybyNN(es, q, 'description_vector')
             res_semantic = semSearch(es, q, 'description_vector', queries)
@@ -258,8 +290,12 @@ def search(query=''):
     # print(items)
 
     # return view
-    queries['query'] = q
-    return render_template('index.html', query=queries, query_engines=query_engines, items=items, show_filter=show_filter)
+    if request.endpoint == 'gui':
+        queries['query'] = q
+        return render_template('index.html', query=queries, query_engines=query_engines, items=items, show_filter=show_filter)
+
+    if request.endpoint == 'api':
+        return Response(json.dumps(items), mimetype='application/json')
 
 
 # start app

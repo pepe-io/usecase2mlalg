@@ -33,7 +33,7 @@ embed = hub.load("./.USE4/")
 def str_to_list(s):
     s = s.replace("'", "").replace(' ,', ',').replace(
         '[', '').replace(']', '').split(',')
-    s = [i for i in s if i]
+    s = [i.strip() for i in s if i]
     return s
 
 
