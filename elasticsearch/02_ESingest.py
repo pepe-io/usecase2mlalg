@@ -11,13 +11,33 @@ import tensorflow as tf
 import tensorflow_hub as hub
 
 
+# es instance names
+es_indexes = {
+    'use': 'usecase2mlalg',
+    'use_large': 'usecase2mlalg_large'
+}
+
+
+# parse arguments
+print(len(sys.argv), sys.argv)
+if len(sys.argv) < 3:
+    print('use "use" or "use_large" as argument to select an elasticsearch instance')
+    print('provide a dataset as second argument')
+    sys.exit()
+else:
+    model = sys.argv[1]
+    index = es_indexes[model]
+    dataset = sys.argv[2]
+    print('index:', index)
+
+
 # connect to ES on localhost on port 9200
 print('##################################################')
 print('Connecting to Elasticsearch...')
 es = Elasticsearch([{'host': 'localhost', 'port': 9200}])
 if es.ping():
     print('established')
-    print('try: http://localhost:9200/usecase2mlalg')
+    print('try: http://localhost:9200/'+index)
 else:
     print('FAILED!')
     sys.exit()
@@ -25,9 +45,52 @@ print('##################################################')
 
 
 # load USE4 model
+if model == 'use':
+    # embed = hub.load("https://tfhub.dev/google/universal-sentence-encoder/4")
+    embed = hub.load("./.USE4/")
+# load USE5_large model
+elif model == 'use_large':
+    embed = hub.load("./.USE5_large/")
+# exit if model is not known
+else:
+    print('model not defined')
+    sys.exit()
 
-# embed = hub.load("https://tfhub.dev/google/universal-sentence-encoder/4")
-embed = hub.load("./.USE4/")
+
+# load dataset
+csv_in = csv_format = None
+
+# kaggle competitions
+if dataset == 'ka' or dataset == 'kaggle':
+    csv_in = '../data/database/kaggle_competitions_01_original.csv'
+    csv_format = 'kaggle'
+
+# mlart
+if dataset == 'ma' or dataset == 'mlart':
+    csv_in = '../data/database/mlart_01_original.csv'
+    csv_format = 'mlart'
+
+# github
+if dataset == 'gh' or dataset == 'github':
+    csv_in = '../data/database/db_04_analyzed_v02.csv'
+    csv_format = 'github'
+
+# thecleverprogrammer
+if dataset == 'tcp' or dataset == 'thecleverprogrammer':
+    csv_in = '../data/database/thecleverprogrammer_01_original.csv'
+    csv_format = 'tcp'
+
+# blobcity
+if dataset == 'bc' or dataset == 'blobcity':
+    csv_in = '../data/database/blobcity_02_analyzed.csv'
+    csv_format = 'github'
+
+if dataset == None or csv_format == None:
+    print('dataset ('+dataset+') not found')
+    sys.exit()
+
+# function to rebuild list back from string
+# that happens when it is stored in CSV without json-encode the data
 
 
 def str_to_list(s):
@@ -35,6 +98,8 @@ def str_to_list(s):
         '[', '').replace(']', '').split(',')
     s = [i.strip() for i in s if i]
     return s
+
+# mapper to convert CSV to the mapping of Elasticsearch index
 
 
 def mapper(row, style):
@@ -153,22 +218,6 @@ NUM_INDEXED = 100000
 cnt = 0
 i = 0
 
-# kaggle competitions
-csv_in = '../data/database/kaggle_competitions_01_original.csv'
-csv_format = 'kaggle'
-
-# mlart
-csv_in = '../data/database/mlart_01_original.csv'
-csv_format = 'mlart'
-
-# github
-csv_in = '../data/database/db_04_analyzed_v02.csv'
-csv_format = 'github'
-
-# thecleverprogrammer
-csv_in = '../data/database/thecleverprogrammer_01_original.csv'
-csv_format = 'tcp'
-
 with open(csv_in, encoding='utf-8') as csvfile:
     # let's store converted csv to temp-folder for analysis
     csv_out = '../data/database/.temp/'
@@ -204,7 +253,7 @@ with open(csv_in, encoding='utf-8') as csvfile:
         b = {**row, **vectors}
         # print(json.dumps(tmp,indent=4))
 
-        res = es.index(index="usecase2mlalg", body=b)
+        res = es.index(index=index, body=b)
         print(res)
 
         # keep count of # rows processed
