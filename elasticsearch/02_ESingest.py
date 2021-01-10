@@ -2,9 +2,11 @@
 from flask import Flask, request
 from datetime import datetime
 import json
+import os
 import sys
-import csv
-import pandas as pd
+# import csv
+# import pandas as pd
+import time
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 import tensorflow as tf
@@ -22,7 +24,7 @@ es_indexes = {
 print(len(sys.argv), sys.argv)
 if len(sys.argv) < 3:
     print('use "use" or "use_large" as argument to select an elasticsearch instance')
-    print('provide a dataset as second argument')
+    print('provide a dataset or * as second argument')
     sys.exit()
 else:
     model = sys.argv[1]
@@ -58,216 +60,224 @@ else:
 
 
 # load dataset
-csv_in = csv_format = None
-
-# kaggle competitions
-if dataset == 'ka' or dataset == 'kaggle':
-    csv_in = '../data/database/kaggle_competitions_01_original.csv'
-    csv_format = 'kaggle'
-
-# mlart
-if dataset == 'ma' or dataset == 'mlart':
-    csv_in = '../data/database/mlart_01_original.csv'
-    csv_format = 'mlart'
-
-# github
-if dataset == 'gh' or dataset == 'github':
-    csv_in = '../data/database/db_04_analyzed_v02.csv'
-    csv_format = 'github'
-
-# thecleverprogrammer
-if dataset == 'tcp' or dataset == 'thecleverprogrammer':
-    csv_in = '../data/database/thecleverprogrammer_01_original.csv'
-    csv_format = 'tcp'
-
-# blobcity
-if dataset == 'bc' or dataset == 'blobcity':
-    csv_in = '../data/database/blobcity_02_analyzed.csv'
-    csv_format = 'github'
-
-if dataset == None or csv_format == None:
-    print('dataset ('+dataset+') not found')
-    sys.exit()
-
-# function to rebuild list back from string
-# that happens when it is stored in CSV without json-encode the data
-
-
-def str_to_list(s):
-    s = s.replace("'", "").replace(' ,', ',').replace(
-        '[', '').replace(']', '').split(',')
-    s = [i.strip() for i in s if i]
-    return s
-
-# mapper to convert CSV to the mapping of Elasticsearch index
-
-
-def mapper(row, style):
-    '''
-    mapper to adopt csv to db-schema
-
-    title, title_vector, description, description_vector,
-    link, category, category_score, subcategory, subcategory_score, 
-    tags, kind, ml_libs, host, license, language, score,
-    date_project, date_scraped
-    '''
-
-    # kaggle mapping
-    if style == 'kaggle':
-        return {
-            'title': row['title'],
-            'description': row['description'],
-            'link': row['link'],
-            # 'category': '',
-            # 'category_score': 0,
-            # 'subcategory': '',
-            # 'subcategory_score': 0,
-            'tags': list(set(str_to_list(row['tags']) + str_to_list(row['tags']))),
-            'kind': 'project',
-            'ml_libs': str_to_list(row['ml_libs']),
-            'host': 'www.kaggle.com',
-            'license': row['license'],
-            'language': row['type'],
-            'score': row['score_views'],
-            'date_project': datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S"),
-            'date_scraped': datetime.strptime(row['scraped_at'], "%Y-%m-%d %H:%M:%S"),
-            # 'ml_terms': row['ml_terms'],
-            # 'score_raw': json.dumps({'views': row['views'], 'votes': row['votes'], 'score_private': row['score_private'], 'score_public': row['score_public']}),
-        }
-
-    # github mapping
-    if style == 'github':
-        cat_score = 1 if row['industry'] != '' else 0
-        subcat_score = 1 if row['type'] != '' else 0
-        #tags = row['ml_tags'] if len(row['ml_tags']) > 0 else ''
-        return {
-            'title': row['name'],
-            'description': row['description2'],
-            'link': row['link'],
-            'category': row['industry'],
-            'category_score': cat_score,
-            'subcategory': row['type'],
-            'subcategory_score': subcat_score,
-            'tags': str_to_list(row['ml_tags']),
-            'kind': 'Project',
-            'ml_libs': str_to_list(row['ml_libs']),
-            'host': 'www.github.com',
-            'license': row['license'],
-            'language': row['language_primary'],
-            'score': row['stars_score'],
-            'date_project': datetime.strptime(row['pushed_at'], "%Y-%m-%d %H:%M:%S"),
-            'date_scraped': datetime.strptime(row['scraped_at'], "%Y-%m-%d %H:%M:%S"),
-            # 'ml_terms': row['keywords'],
-            # 'score_raw': json.dumps({'stars': row['stars'], 'contributors': row['contributors']}),
-        }
-
-    # mlart mapping
-    if style == 'mlart':
-        title = row['Title'] if row['Title'] != '' else row['title']
-        cat_score = 1 if row['Theme'] != '' else 0
-        subcat_score = 1 if row['Medium'] != '' else 0
-        return {
-            'title': title,
-            'description': row['subtitle'],
-            'link': row['url'],
-            'category': str_to_list(row['Theme']),
-            'category_score': cat_score,
-            'subcategory': str_to_list(row['Medium']),
-            'subcategory_score': subcat_score,
-            'tags': str_to_list(row['Technology']),
-            'kind': 'Showcase',
-            # 'ml_libs': [],
-            'host': 'mlart.co',
-            # 'license': '',
-            # 'language': '',
-            # 'score': 0,
-            'date_project': datetime.strptime(row['Date'], "%Y-%m-%d"),
-            'date_scraped': datetime.strptime(row['scraped_at'], "%Y-%m-%d %H:%M:%S"),
-            # 'score_raw': json.dumps({'days_since_featured': row['Days Since Featured']}),
-        }
-
-    # thecleverprogrammer
-    # date	link	ml_libs	ml_score	ml_slugs	ml_tags	ml_terms	text	title
-    if style == 'tcp':
-        return {
-            'title': row['title'],
-            'description': row['text'],
-            'link': row['link'],
-            # 'category': '',
-            # 'category_score': 0,
-            # 'subcategory': '',
-            # 'subcategory_score': 0,
-            'tags': str_to_list(row['ml_tags']),
-            'kind': 'Project',
-            'ml_libs': str_to_list(row['ml_libs']),
-            'host': 'thecleverprogrammer.com',
-            # 'license': '',
-            'language': 'Python',
-            # 'score': 0,
-            'date_project': datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S"),
-            'date_scraped': datetime.strptime('2020-12-20', "%Y-%m-%d"),
-            # 'score_raw': json.dumps({'days_since_featured': row['Days Since Featured']}),
-        }
-
-    return None
+path = '../data/database/json/'
+subfolder = os.listdir(path)
 
 
 # CONSTANTS
-NUM_INDEXED = 100000
+FORCE_QUIT = 0          # 0 ... disable
+STORE_CHUNKS = True     # store chunks of 1000 records
+i = last = 0
 
-cnt = 0
-i = 0
+if dataset == '*':
+    folders = subfolder
+else:
+    if dataset in subfolder:
+        folders = [dataset]
+    else:
+        print('dataset not found:', dataset)
+        print('datasets available:', subfolder)
+        sys.exit()
 
-with open(csv_in, encoding='utf-8') as csvfile:
-    # let's store converted csv to temp-folder for analysis
-    csv_out = '../data/database/.temp/'
-    df = pd.DataFrame()
+print('datasets:', folders)
 
-    # readCSV = csv.reader(csvfile, delimiter=';')
-    readCSV = csv.DictReader(csvfile, delimiter=';')
-    # next(readCSV, None)  # skip the headers
-    for row in readCSV:
-        # print(row)
-        row = mapper(row, csv_format)
-        df = df.append(row, ignore_index=True)
+start = time.time()
+for folder in folders:
+    bulk = []
+    j = 0
 
-        if row == None:
-            print('mapping not found')
-            sys.exit()
-        # print(row)
-        # print(row['title'])
+    fp = os.path.join(path, folder)
+    files = os.listdir(fp)
+    print('items:', len(files))
 
-        print(row['link'])
-        i += 1
+    for file in files:
+        fp = os.path.join(path, folder, file)
 
-        vec_t = tf.make_ndarray(tf.make_tensor_proto(
-            embed([row['title']]))).tolist()[0]
-        vec_d = tf.make_ndarray(tf.make_tensor_proto(
-            embed([row['description']]))).tolist()[0]
+        with open(fp, encoding='utf-8') as f:
 
-        #record = json.dumps(row)
-        vectors = {
-            "title_vector": vec_t,
-            "description_vector": vec_d,
-        }
-        b = {**row, **vectors}
-        # print(json.dumps(tmp,indent=4))
+            id = file.replace('.json', '')
+            # print(id)
 
-        res = es.index(index=index, body=b)
-        print(res)
+            raw = f.read()
+            raw = json.loads(raw)
 
-        # keep count of # rows processed
-        cnt += 1
-        if cnt % 100 == 0:
-            print(cnt)
+            # print(raw)
+            # sys.exit()
 
-        if cnt == NUM_INDEXED:
-            break
+            # cleanup record to prevent flooding
+            record = {}
 
-    # store parsed csv
-    fp = csv_in.split('/')[-1]
-    df.to_csv(csv_out + fp, sep=';', index=False)
+            if 'title' in raw and raw['title'] != '':
+                record['title'] = raw['title']
+            else:
+                record['title'] = ''
 
+            if 'description' in raw and raw['description'] != '':
+                record['description'] = raw['description']
+            else:
+                record['description'] = ''
+
+            if 'words' in raw and raw['words'] != '':
+                record['words'] = raw['words']
+
+            if 'summarization' in raw and raw['summarization'] != '':
+                record['summarization'] = raw['summarization']
+            else:
+                record['summarization'] = record['description']
+
+            if 'sum_words' in raw and raw['sum_words'] != '':
+                record['sum_words'] = raw['sum_words']
+
+            if 'link' in raw and raw['link'] != '':
+                record['link'] = raw['link']
+
+            if 'category' in raw and raw['category'] != '':
+                record['category'] = raw['category']
+
+            if 'category_score' in raw and raw['category_score'] != '':
+                record['category_score'] = raw['category_score']
+
+            if 'subcategory' in raw and raw['subcategory'] != '':
+                record['subcategory'] = raw['subcategory']
+
+            if 'subcategory_score' in raw and raw['subcategory_score'] != '':
+                record['subcategory_score'] = raw['subcategory_score']
+
+            if 'tags' in raw and raw['tags'] != '':
+                record['tags'] = raw['tags']
+
+            if 'kind' in raw and raw['kind'] != '':
+                record['kind'] = raw['kind']
+
+            if 'ml_libs' in raw and raw['ml_libs'] != '':
+                record['ml_libs'] = raw['ml_libs']
+
+            if 'host' in raw and raw['host'] != '':
+                record['host'] = raw['host']
+
+            if 'license' in raw and raw['license'] != '':
+                record['license'] = raw['license']
+
+            if 'language' in raw and raw['language'] != '':
+                record['language'] = raw['language']
+
+            if 'score' in raw and raw['score'] != '':
+                record['score'] = raw['score']
+
+            if 'date_project' in raw and raw['date_project'] != '':
+                record['date_project'] = raw['date_project']
+
+            if 'date_scraped' in raw and raw['date_scraped'] != '':
+                record['date_scraped'] = raw['date_scraped']
+
+            # print(record)
+            # sys.exit()
+
+            #print(i, record['link'])
+
+            # convert date-strings to datetime objects
+            if 'date_project' in record:
+                try:
+                    record['date_project'] = datetime.strptime(
+                        record['date_project'], "%Y-%m-%d %H:%M:%S")
+                except:
+                    record.pop('date_project')
+            if 'date_scraped' in record:
+                try:
+                    record['date_scraped'] = datetime.strptime(
+                        record['date_scraped'], "%Y-%m-%d %H:%M:%S")
+                except:
+                    record.pop('date_scraped')
+
+            # append category and subcategory on summary
+            # if 'subcategory' in record:
+            #     if isinstance(record['subcategory'], list):
+            #         s = record['subcategory'][0]
+            #     else:
+            #         s = record['subcategory']
+            #     record['summarization'] = s + '. ' + record['summarization']
+
+            # if 'category' in record:
+            #     if isinstance(record['subcategory'], list):
+            #         s = record['category'][0]
+            #     else:
+            #         s = record['category']
+            #     record['summarization'] = s + '. ' + record['summarization']
+
+            vec_t = tf.make_ndarray(tf.make_tensor_proto(
+                embed([record['title']]))).tolist()[0]
+            vec_d = tf.make_ndarray(tf.make_tensor_proto(
+                embed([record['description']]))).tolist()[0]
+            vec_s = tf.make_ndarray(tf.make_tensor_proto(
+                embed([record['summarization']]))).tolist()[0]
+
+            vectors = {
+                "title_vector": vec_t,
+                "description_vector": vec_d,
+                "summarization_vector": vec_s,
+            }
+            record.update(vectors)
+
+            # print(record)
+            # sys.exit()
+
+            #b = {**record, **vectors}
+            # print(json.dumps(tmp,indent=4))
+
+            # res = es.index(index=index, body=b)
+            # print(res)
+            bulk.append({
+                "index": {
+                    "_id": id
+                }
+            })
+            bulk.append(record)
+
+            # keep count of rows processed
+            i += 1
+            j += 1
+            if i % 100 == 0:
+                print('total:', i, '/ batch:', j, 'of',
+                      len(files), '/ folder:', folder)
+
+            if STORE_CHUNKS == True and i % 1000 == 0:
+                print('')
+                print(i, 'storing items')
+                res = es.bulk(index=index, body=bulk)
+                res_clean = dict(res)
+                res_clean['item_count'] = len(res['items'])
+                res_clean.pop('items')
+                print('===== RECORDS STORED IN ELASTICSEARCH =====')
+                print(res_clean)
+                print('')
+                print('')
+
+                bulk = []
+
+            end = time.time()
+            dur = round(end-start, 0)
+            if dur % 10 == 0 and dur != last:
+                print('')
+                print('----- RUNNING:', dur, 'seconds -----')
+                print('')
+                last = dur
+
+            if FORCE_QUIT != 0 and i >= FORCE_QUIT:
+                print('FORCED QUIT')
+                break
+
+    print('')
+    print(i, 'storing items')
+    res = es.bulk(index=index, body=bulk)
+    res_clean = dict(res)
+    res_clean['item_count'] = len(res['items'])
+    res_clean.pop('items')
+    print('===== RECORDS STORED IN ELASTICSEARCH =====')
+    print(res_clean)
+    print('')
+    print('')
+
+end = time.time()
 
 print('##################################################')
-print('Done', i, 'items added')
+print('DONE - added', i, 'items in', round(end-start, 3), 'seconds')

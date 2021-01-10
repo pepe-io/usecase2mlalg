@@ -1,3 +1,4 @@
 /data/repositories
+/data/database/json
 .*
 !/.gitignore

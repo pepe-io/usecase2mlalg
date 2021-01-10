@@ -77,9 +77,9 @@ def parse_es_bool_query(must, must_not):
     b = {}
 
     # match
-    m = {}
+    m = []
     for tag in must:
-        m.update({"match": {tag: must[tag]}})
+        m.append({"match": {tag: must[tag]}})
 
         # # exists
         # m.update({
@@ -90,21 +90,17 @@ def parse_es_bool_query(must, must_not):
 
     if len(m) > 0:
         b.update({
-            "must": [
-                m
-            ]
+            "must": m
         })
 
     # match not
-    mn = {}
+    mn = []
     for tag in must_not:
-        mn.update({"match": {tag: must_not[tag]}})
+        mn.append({"match": {tag: must_not[tag]}})
 
     if len(mn) > 0:
         b.update({
-            "must_not": [
-                mn
-            ]
+            "must_not": mn
         })
 
     # # exists
@@ -114,6 +110,7 @@ def parse_es_bool_query(must, must_not):
     #     }
     # })
 
+    # print('b', b)
     return b
 
 
@@ -164,7 +161,7 @@ def semSearch(es, sent, tag_, embedding, must, must_not={}, index='usecase2mlalg
     @args:
         es          Elasticsearch instance
         sent        search query term
-        tag_        tag for vector search ('title' or 'description')
+        tag_        tag for vector search ('title' or 'summarization')
         must        dict of must-match-rules of format {field: value}
         must_not    dict of must_not-match-rules of format {field: value}
         index       name of ES instance
@@ -192,7 +189,9 @@ def semSearch(es, sent, tag_, embedding, must, must_not={}, index='usecase2mlalg
                         "match_all": {}
                     },
                     "script": {
-                        # 'source': 'cosineSimilarity(params.query_vector, "'+tag_+'") + 1.0', # without boosting
+                        # without boosting
+                        # "source": "cosineSimilarity(params.query_vector, '"+tag_+"') + 1.0",
+                        # with boosting
                         "source": "(cosineSimilarity(params.query_vector, '"+tag_+"') + 1.0) / 2 + ( doc['score'].size() > 0 ? doc['score'].value*" + str(boost) + " : 0 )",
                         "params": {"query_vector": query_vector}
                     }
@@ -208,6 +207,9 @@ def semSearch(es, sent, tag_, embedding, must, must_not={}, index='usecase2mlalg
                         "bool": b
                     },
                     "script": {
+                        # without boosting
+                        # "source": "cosineSimilarity(params.query_vector, '"+tag_+"') + 1.0",
+                        # with boosting
                         "source": "(cosineSimilarity(params.query_vector, '"+tag_+"') + 1.0) / 2 + ( doc['score'].size() > 0 ? doc['score'].value*" + str(boost) + " : 0 )",
                         "params": {"query_vector": query_vector}
                     }
@@ -215,7 +217,7 @@ def semSearch(es, sent, tag_, embedding, must, must_not={}, index='usecase2mlalg
             }
         }
 
-    #print(json.dumps(b, indent=4))
+    # print(json.dumps(b, indent=4))
     res = es.search(index=index, body=b)
     return res
 
@@ -228,9 +230,16 @@ def format_result(res, extra={}):
     ret['id'] = res['_id']
     ret['search_score'] = res['_score']
     ret.update(res['_source'])
-    ret.pop('description')
-    ret.pop('title_vector')
-    ret.pop('description_vector')
+    if 'title_vector' in ret:
+        ret.pop('title_vector')
+    # if 'description' in ret:
+    #     ret.pop('description')
+    if 'description_vector' in ret:
+        ret.pop('description_vector')
+    # if 'summarization' in ret:
+    #     ret.pop('summarization')
+    if 'summarization_vector' in ret:
+        ret.pop('summarization_vector')
     ret.update(extra)
 
     return ret
@@ -289,7 +298,7 @@ def search(query=''):
     bundle = True
 
     # filters are stored as queries
-    queries = {}
+    match = {}
     match_not = {}
 
     # define default embedding
@@ -299,20 +308,59 @@ def search(query=''):
     # define default boosting for social_score
     boosting = 0
 
+    # query engines and their html-form-counterpart
+    query_engines = {
+        'kt': 'checked',
+        'st': 'checked',
+        'ks': 'checked',
+        'ss': 'checked',
+        'sum': 'checked',
+        'des': '',
+    }
+
+    # css-attribute to hide filters (default value)
+    show_filter = 'hidden'
+
     # get query from POST
     if request.method == 'POST':
         q = request.form['search']
 
         # add filters to tags
         if request.form.get('tags'):
-            queries['tags'] = request.form.get('tags')
+            match['tags'] = request.form.get('tags')
             show_filter = ''
         if request.form.get('kind'):
-            queries['kind'] = request.form.get('kind')
+            match['kind'] = request.form.get('kind')
             show_filter = ''
         if request.form.get('ml_libs'):
-            queries['ml_libs'] = request.form.get('ml_libs')
+            match['ml_libs'] = request.form.get('ml_libs')
             show_filter = ''
+        print(match)
+
+        if request.form.get('tags_not'):
+            match_not['tags'] = request.form.get('tags_not')
+            show_filter = ''
+        if request.form.get('kind_not'):
+            match_not['kind'] = request.form.get('kind_not')
+            show_filter = ''
+        if request.form.get('ml_libs_not'):
+            match_not['ml_libs'] = request.form.get('ml_libs_not')
+            show_filter = ''
+        print(match_not)
+
+        # switch embedding
+        if request.form.get('model'):
+            model = request.form.get('model')
+
+        # switch secondary search
+        if request.form.get('secondary'):
+            secondary = request.form.get('secondary')
+            if secondary == 'summarization':
+                query_engines['sum'] = 'checked'
+                query_engines['des'] = ''
+            else:
+                query_engines['sum'] = ''
+                query_engines['des'] = 'checked'
 
     # get query from GET
     api_q_engine = []
@@ -327,21 +375,21 @@ def search(query=''):
 
         # add filters to tags
         if 'tags' in request.args:
-            queries['tags'] = request.args.get('tags')
+            match['tags'] = request.args.get('tags')
         if 'not_tags' in request.args:
             match_not['tags'] = request.args.get('not_tags')
 
         if 'kind' in request.args:
-            queries['kind'] = request.args.get('kind')
+            match['kind'] = request.args.get('kind')
         if 'not_kind' in request.args:
             match_not['kind'] = request.args.get('not_kind')
 
         if 'libs' in request.args:
-            queries['ml_libs'] = request.args.get('libs')
+            match['ml_libs'] = request.args.get('libs')
         if 'not_libs' in request.args:
             match_not['ml_libs'] = request.args.get('not_libs')
 
-        # switch model
+        # switch embedding
         if 'model' in request.args:
             model = request.args.get('model')
 
@@ -362,39 +410,33 @@ def search(query=''):
     if model == 'use':
         embedding = embed_use
         instance = es_indexes[model]
+        use = 'checked'
+        use_large = ''
     # load USE5_large model
     elif model == 'use_large':
         embedding = embed_use_large
         instance = es_indexes[model]
+        use = ''
+        use_large = 'checked'
     # exit if model is not known
     else:
         print('model not defined')
         sys.exit()
 
-    print('model:', model, ', instance:', instance)
-
-    # query engines and their html-from-counterpart
-    query_engines = {
-        'kt': ' checked',
-        'st': ' checked',
-        'kd': ' checked',
-        'sd': ' checked',
-    }
-    # css-attribute to hide filters (default value)
-    show_filter = 'hidden'
+    print('model:', model, '| instance:', instance)
 
     if q != '':
         i = 0
         print('q:', q)
 
-        # print(queries)
+        # print(match)
 
-        # perform keyword search for title
+        # perform keyword primary search (title)
         if request.form.get('kt') or 'kt' in api_q_engine:
-            query_engines['kt'] = ' checked'
+            query_engines['kt'] = 'checked'
             # res_kw = keywordSearch(es, q, 'title')
             res_kw = keySearch(
-                es, dict({'title': q}, **queries), index=instance, size=size, must_not=match_not, boost=boosting)
+                es, dict({'title': q}, **match), index=instance, size=size, must_not=match_not, boost=boosting)
             for hit in res_kw['hits']['hits']:
                 items.append(format_result(
                     hit, extra={'index': 'index'+str(i), 'search': 'KT', 'instance': instance, 'embedding': model}))
@@ -402,25 +444,30 @@ def search(query=''):
         else:
             query_engines['kt'] = ''
 
-        # perform keyword search for description
-        if request.form.get('kd') or 'kd' in api_q_engine:
-            query_engines['kd'] = ' checked'
-            # res_kw = keywordSearch(es, q, 'description')
+        # perform keyword secondary search (summarization / description)
+        if request.form.get('ks') or 'ks' in api_q_engine or 'kd' in api_q_engine:
+            if 'ks' in api_q_engine:
+                secondary = 'summarization'
+            else:
+                secondary = 'description'
+
+            query_engines['ks'] = 'checked'
+            # res_kw = keywordSearch(es, q, 'summarization')
             res_kw = keySearch(es, dict(
-                {'title': q}, **queries), index=instance, size=size, must_not=match_not, boost=boosting)
+                {secondary: q}, **match), index=instance, size=size, must_not=match_not, boost=boosting)
             for hit in res_kw['hits']['hits']:
                 items.append(format_result(
-                    hit, extra={'index': 'index'+str(i), 'search': 'KD', 'instance': instance, 'embedding': model}))
+                    hit, extra={'index': 'index'+str(i), 'search': 'K'+secondary[0].upper(), 'instance': instance, 'embedding': model}))
                 i += 1
         else:
-            query_engines['kd'] = ''
+            query_engines['ks'] = ''
 
-        # perform semantic search for title
+        # perform semantic primary search (title)
         if request.form.get('st') or 'st' in api_q_engine:
-            query_engines['st'] = ' checked'
+            query_engines['st'] = 'checked'
             # res_semantic = sentenceSimilaritybyNN(es, q, 'title_vector')
             res_semantic = semSearch(
-                es, q, 'title_vector', embedding, queries, index=instance, size=size, must_not=match_not, boost=boosting)
+                es, q, 'title_vector', embedding, match, index=instance, size=size, must_not=match_not, boost=boosting)
             for hit in res_semantic['hits']['hits']:
                 items.append(format_result(
                     hit, extra={'index': 'index'+str(i), 'search': 'ST', 'instance': instance, 'embedding': model}))
@@ -428,18 +475,23 @@ def search(query=''):
         else:
             query_engines['st'] = ''
 
-        # perform semantic search for description
-        if request.form.get('sd') or 'sd' in api_q_engine:
-            query_engines['sd'] = ' checked'
-            #res_semantic = sentenceSimilaritybyNN(es, q, 'description_vector')
+        # perform semantic secondary search (summarization / description)
+        if request.form.get('ss') or 'sd' in api_q_engine or 'ss' in api_q_engine:
+            if 'ss' in api_q_engine:
+                secondary = 'summarization'
+            else:
+                secondary = 'description'
+
+            query_engines['ss'] = 'checked'
+            #res_semantic = sentenceSimilaritybyNN(es, q, 'summarization_vector')
             res_semantic = semSearch(
-                es, q, 'description_vector', embedding, queries, index=instance, size=size, must_not=match_not, boost=boosting)
+                es, q, secondary+'_vector', embedding, match, index=instance, size=size, must_not=match_not, boost=boosting)
             for hit in res_semantic['hits']['hits']:
                 items.append(format_result(
-                    hit, extra={'index': 'index'+str(i), 'search': 'SD', 'instance': instance, 'embedding': model}))
+                    hit, extra={'index': 'index'+str(i), 'search': 'S'+secondary[0].upper(), 'instance': instance, 'embedding': model}))
                 i += 1
         else:
-            query_engines['sd'] = ''
+            query_engines['ss'] = ''
 
     # bundle items (similar matches by engine get grouped together)
     if bundle == True:
@@ -451,8 +503,8 @@ def search(query=''):
 
     # return view to gui endpoint
     if request.endpoint == 'gui':
-        queries['query'] = q
-        return render_template('index.html', query=queries, query_engines=query_engines, items=items, show_filter=show_filter)
+        match['query'] = q
+        return render_template('index.html', query=match, query_not=match_not, query_engines=query_engines, items=items, show_filter=show_filter, use=use, use_large=use_large)
 
     # return json to api endpoint
     if request.endpoint == 'api':

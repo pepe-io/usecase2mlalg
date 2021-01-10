@@ -57,6 +57,20 @@ b = {"mappings": {
             "type": "dense_vector",
                     "dims": 512
         },
+        "words": {
+            "type": "float"
+        },
+        "summarization": {
+            "type": "text",
+                    "analyzer": "english"
+        },
+        "summarization_vector": {
+            "type": "dense_vector",
+                    "dims": 512
+        },
+        "sum_words": {
+            "type": "float"
+        },
         "link": {
             "type": "text"
         },
