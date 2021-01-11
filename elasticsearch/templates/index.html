@@ -2,24 +2,6 @@
 <title>usecase2ml - search</title>
 {% endblock %} {% block body %}
 <div class="container">
-  <!-- <h1 style="text-align: center">usecase2ml</h1> -->
-  <!-- <h2 style="text-align: center">query: {{ query }}</h2> -->
-  <!-- <div class="row">
-    <form action="/" method="POST" class="form-inline">
-      <div class="form-group mx-sm-3 mb-2">
-        <label for="search" class="sr-only">Search</label>
-        <input
-          type="text"
-          class="form-control"
-          id="search"
-          name="search"
-          value="{{ query }}"
-        />
-      </div>
-      <button type="submit" class="btn btn-primary mb-2">Search</button>
-    </form>
-  </div> -->
-
   <div class="row mt-3">
     <!-- Search Field -->
     <div class="container">
@@ -83,7 +65,7 @@
                   <div class="form-check form-check-inline col-sm-2">
                     <input class="form-check-input" type="radio"
                     id="summarization" name="secondary" value="summarization" {{
-                    query_engines['sum'] }} />
+                    query_secondary['sum'] }} />
                     <label class="form-check-label" for="gridCheck1">
                       Summarization
                     </label>
@@ -91,7 +73,7 @@
                   <div class="form-check form-check-inline col-sm-2">
                     <input class="form-check-input" type="radio"
                     id="description" name="secondary" value="description" {{
-                    query_engines['des'] }} />
+                    query_secondary['des'] }} />
                     <label class="form-check-label" for="gridCheck1">
                       Description
                     </label>
@@ -107,28 +89,13 @@
               <div class="col-sm-2">Embedding</div>
               <div class="col-sm-10">
                 <div class="form-check">
-                  <input
-                    class="form-check-input"
-                    type="radio"
-                    name="model"
-                    id="use"
-                    value="use"
-                    {{
-                    use
-                    }}
-                  />
+                  <input class="form-check-input" type="radio" name="model"
+                  id="use" value="use" {{ embeddings['use'] }} />
                   <label class="form-check-label" for="use"> USE4 (DAN) </label>
                 </div>
                 <div class="form-check">
-                  <input
-                    class="form-check-input"
-                    type="radio"
-                    name="model"
-                    id="use_large"
-                    value="use_large"
-                    {{
-                    use_large
-                    }}
+                  <input class="form-check-input" type="radio" name="model"
+                  id="use_large" value="use_large" {{ embeddings['use_large'] }}
                   />
                   <label class="form-check-label" for="use_large">
                     USE5 large (Transformer)
@@ -144,7 +111,34 @@
             <div class="form-group row">
               <div class="col-sm-2">Filter</div>
               <div class="col-sm-10">
+                <!-- first row -->
                 <div>
+                  <div class="form-check form-check-inline">
+                    <input
+                      class="form-control form-control-sm"
+                      type="text"
+                      placeholder="category"
+                      id="category"
+                      name="category"
+                      value="{{ query.category }}"
+                      autocomplete="off"
+                      list="category_list"
+                    />
+                  </div>
+
+                  <div class="form-check form-check-inline">
+                    <input
+                      class="form-control form-control-sm"
+                      type="text"
+                      placeholder="subcategory"
+                      id="subcategory"
+                      name="subcategory"
+                      value="{{ query.subcategory }}"
+                      autocomplete="off"
+                      list="subcategory_list"
+                    />
+                  </div>
+
                   <div class="form-check form-check-inline">
                     <input
                       class="form-control form-control-sm"
@@ -153,6 +147,8 @@
                       id="tags"
                       name="tags"
                       value="{{ query.tags }}"
+                      autocomplete="off"
+                      list="tags_list"
                     />
                   </div>
 
@@ -164,9 +160,14 @@
                       id="kind"
                       name="kind"
                       value="{{ query.kind }}"
+                      autocomplete="off"
+                      list="kind_list"
                     />
                   </div>
+                </div>
 
+                <!-- second row -->
+                <div>
                   <div class="form-check form-check-inline">
                     <input
                       class="form-control form-control-sm"
@@ -175,10 +176,24 @@
                       id="ml_libs"
                       name="ml_libs"
                       value="{{ query.ml_libs }}"
+                      autocomplete="off"
+                      list="libs_list"
                     />
                   </div>
-                </div>
-                <div>
+
+                  <div class="form-check form-check-inline">
+                    <input
+                      class="form-control form-control-sm"
+                      type="text"
+                      placeholder="host"
+                      id="host"
+                      name="host"
+                      value="{{ query.host }}"
+                      autocomplete="off"
+                      list="host_list"
+                    />
+                  </div>
+
                   <div class="form-check form-check-inline">
                     <input
                       class="form-control form-control-sm"
@@ -187,6 +202,8 @@
                       id="tags_not"
                       name="tags_not"
                       value="{{ query_not.tags }}"
+                      autocomplete="off"
+                      list="tags_list"
                     />
                   </div>
 
@@ -198,10 +215,12 @@
                       id="kind_not"
                       name="kind_not"
                       value="{{ query_not.kind }}"
+                      autocomplete="off"
+                      list="kind_list"
                     />
                   </div>
 
-                  <div class="form-check form-check-inline">
+                  <!-- <div class="form-check form-check-inline">
                     <input
                       class="form-control form-control-sm"
                       type="text"
@@ -209,8 +228,78 @@
                       id="ml_libs_not"
                       name="ml_libs_not"
                       value="{{ query_not.ml_libs }}"
+                      autocomplete="off"
+                      list="libs_list"
                     />
-                  </div>
+                  </div> -->
+
+                  <!-- <div class="form-check form-check-inline">
+                    <input
+                      class="form-control form-control-sm"
+                      type="text"
+                      placeholder="host not"
+                      id="host_not"
+                      name="host_not"
+                      value="{{ query_not.host_not }}"
+                      autocomplete="off"
+                      list="host_list"
+                    />
+                  </div> -->
+                </div>
+
+                <!-- autocomplete -->
+                <datalist id="category_list">
+                  {% for item in js.category %}
+                  <option value="{{ item }}"></option>
+                  {% endfor %}
+                </datalist>
+                <datalist id="subcategory_list">
+                  {% for item in js.subcategory %}
+                  <option value="{{ item }}"></option>
+                  {% endfor %}
+                </datalist>
+                <datalist id="tags_list">
+                  {% for item in js.tags %}
+                  <option value="{{ item }}"></option>
+                  {% endfor %}
+                </datalist>
+                <datalist id="kind_list">
+                  {% for item in js.kind %}
+                  <option value="{{ item }}"></option>
+                  {% endfor %}
+                </datalist>
+                <datalist id="libs_list">
+                  {% for item in js.ml_libs %}
+                  <option value="{{ item }}"></option>
+                  {% endfor %}
+                </datalist>
+                <datalist id="host_list">
+                  {% for item in js.host %}
+                  <option value="{{ item }}"></option>
+                  {% endfor %}
+                </datalist>
+              </div>
+            </div>
+          </div>
+
+          <!-- Boosting -->
+          <div id="boosting" class="">
+            <div class="form-group row">
+              <div class="col-sm-2">Boosting</div>
+              <div class="col-sm-10">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="boosting"
+                  id="boosting_false" value="false" {{ boosting['false'] }} />
+                  <label class="form-check-label" for="boosting_false"
+                    >do not boost score</label
+                  >
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="boosting"
+                  id="boosting_true" value="true" {{ boosting['true'] }} />
+                  <label class="form-check-label" for="boosting_true"
+                    >boost score</label
+                  >
                 </div>
               </div>
             </div>
@@ -222,15 +311,6 @@
           <div class="col-sm-2">
             <a onClick="toggle(options); return false;" href="#">More</a>
           </div>
-          <!-- <div class="col-sm-2">
-            <a onClick="toggle(engines); return false;" href="#">Queries</a>
-          </div>
-          <div class="col-sm-2">
-            <a onClick="toggle(embeddings); return false;" href="#">Embeddings</a>
-          </div>
-          <div class="col-sm-2">
-            <a onClick="toggle(filter); return false;" href="#">Filter</a>
-          </div> -->
         </div>
 
         <!-- Submit -->
@@ -282,19 +362,6 @@
                       >{{ item.title }}</a
                     >
                   </div>
-                  <!--
-                  <div class="row">
-                    <div class="small">tags: <b>{{ ' '.join(item.tags) }}</b></div>
-                    <div class="small">host: <b>{{ item.host }}</b></div>
-                  </div>
-                  {% if item.ml_libs|length > 0 %}
-                  <div class="row">
-                    <div class="small">
-                      ml libraries: <b>{{ ' '.join(item.ml_libs) }}</b>
-                    </div>
-                  </div>
-                  {% endif %}
-                  -->
 
                   <div id="{{ item.index }}" class="hidden">
                     <div class="row mt-3 mb-3">
@@ -305,15 +372,15 @@
                         >
                       </div>
                       <!-- description -->
-                      {% if item.description is defined and query_engines['des']
-                      == 'checked' %}
+                      {% if item.description is defined and
+                      query_secondary['des'] == 'checked' %}
                       <div class="col-sm-2 font-weight-bold">description</div>
                       <div class="col-sm-10">{{ item.description }}</div>
                       {% endif %}
 
                       <!-- summarization -->
                       {% if item.summarization is defined and
-                      query_engines['sum'] == 'checked' %}
+                      query_secondary['sum'] == 'checked' %}
                       <div class="col-sm-2 font-weight-bold">summarization</div>
                       <div class="col-sm-10">{{ item.summarization }}</div>
                       {% endif %}
@@ -414,6 +481,7 @@
           </tbody>
         </table>
       </div>
+      <div>Query Runtime: {{ runtime }} sec</div>
     </div>
 
     {% endif %}
