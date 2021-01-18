@@ -30,52 +30,58 @@
               <div class="col-sm-10">
                 <div>
                   <div class="form-check form-check-inline col-sm-2">
-                    <input class="form-check-input" type="checkbox" id="kt"
-                    name="kt" {{ query_engines['kt'] }} />
+                    <input class="form-check-input" type="checkbox" id="k"
+                    name="k" {{ query_engines['k'] }} />
                     <label class="form-check-label" for="gridCheck1">
-                      Keyword Title
+                      Keyword Based
                     </label>
                   </div>
-                  <div class="form-check form-check-inline col-sm-4">
+                  <!-- <div class="form-check form-check-inline col-sm-4">
                     <input class="form-check-input" type="checkbox" id="ks"
                     name="ks" {{ query_engines['ks'] }} />
                     <label class="form-check-label" for="gridCheck1">
                       Keyword Summarization
                     </label>
-                  </div>
-                </div>
+                  </div> -->
+                  <!-- </div>
 
-                <div>
-                  <div class="form-check form-check-inline col-sm-2">
-                    <input class="form-check-input" type="checkbox" id="st"
-                    name="st" {{ query_engines['st'] }} />
+                <div> -->
+                  <div class="form-check form-check-inline col-sm-3">
+                    <input class="form-check-input" type="checkbox" id="s"
+                    name="s" {{ query_engines['s'] }} />
                     <label class="form-check-label" for="gridCheck1">
-                      Semantic Title
+                      Semantic Search
                     </label>
                   </div>
-                  <div class="form-check form-check-inline col-sm-4">
+                  <!-- <div class="form-check form-check-inline col-sm-4">
                     <input class="form-check-input" type="checkbox" id="ss"
                     name="ss" {{ query_engines['ss'] }} />
                     <label class="form-check-label" for="gridCheck1">
                       Semantic Summarization
                     </label>
-                  </div>
+                  </div> -->
                 </div>
                 <div>
                   <div class="form-check form-check-inline col-sm-2">
+                    <input class="form-check-input" type="radio" id="title"
+                    name="field" value="title" {{ query_secondary['t'] }} />
+                    <label class="form-check-label" for="gridCheck1">
+                      Title
+                    </label>
+                  </div>
+                  <div class="form-check form-check-inline col-sm-2">
                     <input class="form-check-input" type="radio"
-                    id="summarization" name="secondary" value="summarization" {{
-                    query_secondary['sum'] }} />
+                    id="summarization" name="field" value="summarization" {{
+                    query_secondary['s'] }} />
                     <label class="form-check-label" for="gridCheck1">
                       Summarization
                     </label>
                   </div>
                   <div class="form-check form-check-inline col-sm-2">
-                    <input class="form-check-input" type="radio"
-                    id="description" name="secondary" value="description" {{
-                    query_secondary['des'] }} />
+                    <input class="form-check-input" type="radio" id="fulltext"
+                    name="field" value="fulltext" {{ query_secondary['f'] }} />
                     <label class="form-check-label" for="gridCheck1">
-                      Description
+                      Full Text
                     </label>
                   </div>
                 </div>
@@ -291,14 +297,14 @@
                   <input class="form-check-input" type="radio" name="boosting"
                   id="boosting_false" value="false" {{ boosting['false'] }} />
                   <label class="form-check-label" for="boosting_false"
-                    >do not boost score</label
+                    >do not boost engagement score</label
                   >
                 </div>
                 <div class="form-check">
                   <input class="form-check-input" type="radio" name="boosting"
                   id="boosting_true" value="true" {{ boosting['true'] }} />
                   <label class="form-check-label" for="boosting_true"
-                    >boost score</label
+                    >boost engagement score (10x)</label
                   >
                 </div>
               </div>
@@ -335,7 +341,7 @@
               <th>Search</th>
               <th>Score</th>
               <th style="width: 100%">Item</th>
-              <th>Score</th>
+              <!-- <th>Score</th> -->
               <th>Date<!--(Project)--></th>
             </tr>
           </thead>
@@ -371,24 +377,25 @@
                           >{{ item.link }}</a
                         >
                       </div>
-                      <!-- description -->
-                      {% if item.description is defined and
-                      query_secondary['des'] == 'checked' %}
-                      <div class="col-sm-2 font-weight-bold">description</div>
-                      <div class="col-sm-10">{{ item.description }}</div>
+                      <!-- summarization -->
+                      {% if item.summarization is defined %}
+                      <div class="col-sm-2 font-weight-bold">summarization</div>
+                      <div class="col-sm-10">
+                        {{ item.summarization }} ({{ item.words }} words)
+                      </div>
                       {% endif %}
 
-                      <!-- summarization -->
-                      {% if item.summarization is defined and
-                      query_secondary['sum'] == 'checked' %}
-                      <div class="col-sm-2 font-weight-bold">summarization</div>
-                      <div class="col-sm-10">{{ item.summarization }}</div>
+                      <!-- fulltext -->
+                      {% if item.fulltext is defined and query_secondary['f'] ==
+                      'checked' %}
+                      <!-- <div class="col-sm-2 font-weight-bold">fulltext</div>
+                      <div class="col-sm-10">{{ item.fulltext }}</div> -->
                       {% endif %}
 
                       <!-- words -->
                       {% if item.words is defined %}
-                      <div class="col-sm-2 font-weight-bold">length</div>
-                      <div class="col-sm-10">{{ item.words }}</div>
+                      <!-- <div class="col-sm-2 font-weight-bold">words</div>
+                      <div class="col-sm-10">{{ item.words }}</div> -->
                       {% endif %}
 
                       <!-- category -->
@@ -409,7 +416,7 @@
                       {% endif %}
 
                       <!-- tags -->
-                      {% if item.tags is defined %}
+                      {% if item.tags is defined and item.tags|length > 0 %}
                       <div class="col-sm-2 font-weight-bold">tags</div>
                       <div class="col-sm-10">{{ ', '.join(item.tags) }}</div>
                       {% endif %}
@@ -417,8 +424,11 @@
                       <!-- kind -->
                       {% if item.kind is defined %}
                       <div class="col-sm-2 font-weight-bold">kind</div>
+                      {% if item.kind is not string %}
+                      <div class="col-sm-10">{{ ', '.join(item.kind) }}</div>
+                      {% else %}
                       <div class="col-sm-10">{{ item.kind }}</div>
-                      {% endif %}
+                      {% endif %} {% endif %}
 
                       <!-- libraries -->
                       {% if item.ml_libs is defined %}
@@ -428,20 +438,38 @@
 
                       <!-- host -->
                       {% if item.host is defined %}
-                      <div class="col-sm-2 font-weight-bold">host</div>
+                      <div class="col-sm-2 font-weight-bold">source</div>
                       <div class="col-sm-10">{{ item.host }}</div>
                       {% endif %}
 
                       <!-- license -->
                       {% if item.license is defined %}
-                      <div class="col-sm-2 font-weight-bold">license</div>
-                      <div class="col-sm-10">{{ item.license }}</div>
+                      <!-- <div class="col-sm-2 font-weight-bold">license</div>
+                      <div class="col-sm-10">{{ item.license }}</div> -->
                       {% endif %}
 
                       <!-- language -->
                       {% if item.language is defined %}
                       <div class="col-sm-2 font-weight-bold">language</div>
                       <div class="col-sm-10">{{ item.language }}</div>
+                      {% endif %}
+
+                      <!-- search_score -->
+                      {% if item.search_score is defined %}
+                      <!-- <div class="col-sm-2 font-weight-bold">search score</div>
+                      <div class="col-sm-10">{{ item.search_score }}</div> -->
+                      {% endif %}
+
+                      <!-- engagement_score -->
+                      {% if item.engagement_score is defined %}
+                      <div class="col-sm-2 font-weight-bold">engagement</div>
+                      <div class="col-sm-10">{{ item.engagement_score }}</div>
+                      {% endif %}
+
+                      <!-- ml_score -->
+                      {% if item.ml_score is defined %}
+                      <div class="col-sm-2 font-weight-bold">ml score</div>
+                      <div class="col-sm-10">{{ item.ml_score }}</div>
                       {% endif %}
 
                       <!-- date -->
@@ -454,20 +482,20 @@
 
                       <!-- id -->
                       {% if item.id|length > 0 %}
-                      <div class="col-sm-2 font-weight-bold">id</div>
-                      <div class="col-sm-10">{{ item.id }}</div>
+                      <!-- <div class="col-sm-2 font-weight-bold">id</div>
+                      <div class="col-sm-10">{{ item.id }}</div> -->
                       {% endif %}
                     </div>
                   </div>
                 </div>
               </td>
-              <td>
+              <!-- <td>
                 <div class="container">
                   <div class="row">
                     {% if item.score != None %} {{ item.score }} {% endif %}
                   </div>
                 </div>
-              </td>
+              </td> -->
               <td>
                 <div class="container">
                   <div class="row">

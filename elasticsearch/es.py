@@ -1,0 +1,424 @@
+# imports
+from datetime import datetime
+import json
+import os
+import sys
+import time
+from elasticsearch import Elasticsearch
+from elasticsearch.helpers import bulk
+import tensorflow as tf
+import tensorflow_hub as hub
+
+# parse arguments
+print(len(sys.argv), sys.argv)
+# quit if arguments missing
+if len(sys.argv) == 1 or not '-' in sys.argv[1]:
+    print('use "-up" or "-down" to setup your elasticsearch instance')
+    print('use "-ingest" to ingest data into the index')
+    print('provide a dataset or "*" as second argument')
+    sys.exit()
+else:
+    mode = sys.argv[1]
+
+if mode == '-ingest':
+    if len(sys.argv) < 3:
+        print('second argument missing')
+        print('provide a dataset or "*" as second argument')
+        sys.exit()
+    else:
+        dataset = sys.argv[2]
+else:
+    dataset = None
+
+# es instance name
+index = 'usecase2mlalg'
+
+# set treshold for category and subcategory score
+treshold = 0.5
+
+# print some values
+print('index:', index)
+print('mode:', mode)
+print('dataset:', dataset)
+
+# connect to ES on localhost on port 9200
+print('##################################################')
+print('Connecting to Elasticsearch...')
+es = Elasticsearch([{'host': 'localhost', 'port': 9200}])
+if es.ping():
+    print('established')
+    print('try: http://localhost:9200/'+index)
+else:
+    print('FAILED!')
+    sys.exit()
+print('##################################################')
+
+
+# Refer: https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html
+# Mapping: Structure of the index
+# Property/Field: name and type
+
+mapping = {
+    "title": {
+        "type": "text",
+        "analyzer": "english"
+    },
+    "title_vector_use4": {
+        "type": "dense_vector",
+        "dims": 512
+    },
+    "title_vector_use5": {
+        "type": "dense_vector",
+        "dims": 512
+    },
+    "summarization": {
+        "type": "text",
+        "analyzer": "english"
+    },
+    "summarization_vector_use4": {
+        "type": "dense_vector",
+        "dims": 512
+    },
+    "summarization_vector_use5": {
+        "type": "dense_vector",
+        "dims": 512
+    },
+    "fulltext": {
+        "type": "text",
+        "analyzer": "english"
+    },
+    "fulltext_vector_use4": {
+        "type": "dense_vector",
+        "dims": 512
+    },
+    "fulltext_vector_use5": {
+        "type": "dense_vector",
+        "dims": 512
+    },
+    "words": {
+        "type": "float"
+    },
+    "sum_words": {
+        "type": "float"
+    },
+    "link": {
+        "type": "text"
+    },
+    "source": {
+        "type": "text"
+    },
+    "category": {
+        "type": "text",
+        "analyzer": "english"
+    },
+    "category_score": {
+        "type": "float"
+    },
+    "subcategory": {
+        "type": "text",
+        "analyzer": "english"
+    },
+    "subcategory_score": {
+        "type": "float"
+    },
+    "tags": {
+        "type": "text"
+    },
+    "kind": {
+        "type": "text"
+    },
+    "ml_libs": {
+        "type": "text"
+    },
+    "host": {
+        "type": "text"
+    },
+    "license": {
+        "type": "text"
+    },
+    "programming_language": {
+        "type": "text"
+    },
+    "ml_score": {
+        "type": "float"
+    },
+    "engagement_score": {
+        "type": "float"
+    },
+    "date_project": {
+        "type": "date"
+    },
+    "date_scraped": {
+        "type": "date"
+    },
+}
+
+b = {
+    "mappings": {
+        "properties": mapping
+    }
+}
+
+
+# up index
+if mode == '-up':
+    # 400 caused by IndexAlreadyExistsException,
+    ret = es.indices.create(index=index, ignore=400, body=b)
+    print(json.dumps(ret, indent=4))
+    print('elasticsearch instance created')
+    print('Please visit: http://localhost:9200/'+index)
+    sys.exit()
+
+# drop indix
+if mode == '-down':
+    ret = es.indices.delete(index=index)
+    print('elasticsearch instance dropped')
+    sys.exit()
+
+
+# ingest
+if mode == '-ingest':
+    # config
+    FORCE_QUIT = 0          # 0 ... disable
+    STORE_CHUNKS = True     # store chunks of 1000 records
+    CHUNK_SIZE = 500
+
+    # load embedding
+    embeddings = {}
+    # load USE4 model
+    print('load USE4 embedding')
+    use4_start = time.time()
+    embeddings['use4'] = hub.load("./.USE4/")
+    use4_end = time.time()
+    print('loaded ('+str(round(use4_end-use4_start, 3))+'sec)')
+    print('##################################################')
+
+    # load USE5_large model
+    print('load USE5_large embedding')
+    use5_start = time.time()
+    embeddings['use5'] = hub.load("./.USE5_large/")
+    use5_end = time.time()
+    print('loaded ('+str(round(use5_end-use5_start, 3))+'sec)')
+    print('##################################################')
+
+    # load dataset
+    path = '../data/database/json/'
+    subfolder = os.listdir(path)
+
+    if dataset == '*':
+        folders = subfolder
+    else:
+        if dataset in subfolder:
+            folders = [dataset]
+        else:
+            print('dataset not found:', dataset)
+            print('datasets available:', subfolder)
+            sys.exit()
+
+    print('datasets:', folders)
+
+    i = last = x = 0
+    start = time.time()
+    for folder in folders:
+        bulk = []
+        j = 0
+
+        fp = os.path.join(path, folder)
+        files = os.listdir(fp)
+        print('items:', len(files))
+
+        for file in files:
+            fp = os.path.join(path, folder, file)
+
+            with open(fp, encoding='utf-8') as f:
+
+                id = file.replace('.json', '')
+                # print(id)
+
+                raw = f.read()
+                raw = json.loads(raw)
+
+                # print(raw)
+                # sys.exit()
+
+                # cleanup record to prevent flooding
+                record = {}
+
+                # map all fields from mapping
+                for key in mapping.keys():
+                    if key in raw and raw[key] != '':
+                        record[key] = raw[key]
+
+                skip = False
+
+                print(i, record['link'])
+
+                # skip record if title is missing
+                if not 'title' in record or record['title'] == '':
+                    print('skipped - missing title')
+                    skip = True
+
+                # skip if language_code is not 'en'
+                languages = ['en', 'af']
+                if not 'language_code' in raw:
+                    print('skipped - language code missing')
+                    skip = True
+                elif not raw['language_code'] in languages:
+                    print('skipped - wrong language: "' +
+                          raw['language_code']+'"')
+                    skip = True
+
+                # skip record if description is missing
+                # if not 'description' in raw or raw['description'] == '':
+                #     print('skipped - missing description')
+                #     skip = True
+
+                if skip == True:
+                    x += 1
+                else:
+                    # fill summary
+                    if not 'summarization' in record:
+                        record['summarization'] = raw['description'] if 'description' in raw else ''
+
+                    # print(record)
+                    # sys.exit()
+
+                    #print(i, record['link'])
+
+                    # clear category and subcategory if below treshold
+                    if 'category' in record:
+                        if record['category_score'] < treshold:
+                            print('dropped - category')
+                            record.pop('category')
+                            record.pop('category_score')
+
+                    if 'subcategory' in record:
+                        if record['subcategory_score'] < treshold:
+                            print('dropped - subcategory')
+                            record.pop('subcategory')
+                            record.pop('subcategory_score')
+
+                    # convert date-strings to datetime objects
+                    if 'date_project' in record:
+                        try:
+                            record['date_project'] = datetime.strptime(
+                                record['date_project'], "%Y-%m-%d %H:%M:%S")
+                        except:
+                            record.pop('date_project')
+                    if 'date_scraped' in record:
+                        try:
+                            record['date_scraped'] = datetime.strptime(
+                                record['date_scraped'], "%Y-%m-%d %H:%M:%S")
+                        except:
+                            record.pop('date_scraped')
+
+                    # create fulltext
+                    ft = record['summarization']
+
+                    # append title
+                    ft = record['title'] + '. ' + ft
+
+                    # append subcategory
+                    if 'subcategory' in record:
+                        if isinstance(record['subcategory'], list):
+                            s = ', '.join(record['subcategory'])
+                        else:
+                            s = record['subcategory']
+                        ft = s + '. ' + ft
+
+                    # append category
+                    if 'category' in record:
+                        if isinstance(record['category'], list):
+                            s = ', '.join(record['category'])
+                        else:
+                            s = record['category']
+                        ft = s + '. ' + ft
+
+                    # append tags
+                    if 'tags' in record:
+                        if isinstance(record['tags'], list):
+                            s = ', '.join(record['tags'])
+                        else:
+                            s = record['tags']
+                        ft = ft + s
+
+                    # store fulltext
+                    record['fulltext'] = ft
+
+                    # create vectors
+                    vectorize = ['title', 'summarization', 'fulltext']
+                    for field in vectorize:
+                        # print(field)
+                        for embed in embeddings.keys():
+                            # print(embed)
+                            vec = tf.make_ndarray(tf.make_tensor_proto(
+                                embeddings[embed]([record[field]]))).tolist()[0]
+                            record[field+'_vector_'+embed] = vec
+
+                    # print(record)
+                    # sys.exit()
+
+                    #b = {**record, **vectors}
+                    # print(json.dumps(tmp,indent=4))
+
+                    # res = es.index(index=index, body=b)
+                    # print(res)
+                    bulk.append({
+                        "index": {
+                            "_id": id
+                        }
+                    })
+                    bulk.append(record)
+
+                    # keep count of rows processed
+                    i += 1
+                    j += 1
+                    if i % 100 == 0:
+                        print('total:', i, '/ batch:', j, 'of',
+                              len(files), '/ folder:', folder)
+
+                    if STORE_CHUNKS == True and i % 1000 == 0:
+                        print('')
+                        print(i, 'storing items')
+                        res = es.bulk(index=index, body=bulk)
+                        res_clean = dict(res)
+                        res_clean['item_count'] = len(res['items'])
+                        res_clean.pop('items')
+                        print('===== RECORDS STORED IN ELASTICSEARCH =====')
+                        print(res_clean)
+                        print('')
+                        print('')
+
+                        bulk = []
+
+                end = time.time()
+                dur = round(end-start, 0)
+                if dur % 10 == 0 and dur != last:
+                    print('')
+                    print('----- RUNNING:', dur, 'seconds -----')
+                    print('')
+                    last = dur
+
+                if FORCE_QUIT != 0 and i >= FORCE_QUIT:
+                    print('FORCED QUIT')
+                    break
+
+        print('')
+        print(i, 'storing items')
+        if len(bulk) > 0:
+            res = es.bulk(index=index, body=bulk)
+            res_clean = dict(res)
+            res_clean['item_count'] = len(res['items'])
+            res_clean.pop('items')
+            print('===== RECORDS STORED IN ELASTICSEARCH =====')
+            print(res_clean)
+        else:
+            print('FAILED: no records')
+        print('')
+        print('')
+
+    end = time.time()
+
+    print('##################################################')
+    print('DONE - added:', i, 'items | skipped:', x,
+          'items | in', round(end-start, 3), 'seconds')
