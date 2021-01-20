@@ -45,13 +45,12 @@ print('##################################################')
 # load USE5_large model
 print('load USE5_large embedding')
 use5_start = time.time()
-embed_use_large = hub.load("./.USE5_large/")
+#embed_use_large = hub.load("./.USE5_large/")
 use5_end = time.time()
 print('loaded ('+str(round(use5_end-use5_start, 3))+'sec)')
 print('##################################################')
 
 # define default embedding
-model = 'use'
 embed = embed_use
 
 # load gui guide
@@ -101,7 +100,7 @@ def parse_es_bool_query(must, must_not):
     return b
 
 
-def keySearch(es, must, must_not={}, index=es_index, size=20, boost=0):
+def keySearch(es, must, must_not={}, index=es_index, size=20, boost={}):
     '''
     Search by Keyword, td-idf
 
@@ -111,7 +110,7 @@ def keySearch(es, must, must_not={}, index=es_index, size=20, boost=0):
         must_not    dict of must_not-match-rules of format {field: value}
         index       name of ES instance
         size        number of records returned
-        boost       boost multiplier for score (aka social_score from database)
+        boost       boost multipliers for score
 
     @return:
         results
@@ -121,6 +120,24 @@ def keySearch(es, must, must_not={}, index=es_index, size=20, boost=0):
 
     # parse boolean query
     b = parse_es_bool_query(must, must_not)
+
+    # parse scoring script
+    # "(doc['engagement_score'].size() > 1 ? _score*0.01 * doc['engagement_score'].value*" + str(boost) + " : _score*0.01) / " + str(boost)
+    s = [
+        # "_score*0.01",
+    ]
+    for k, v in boost.items():
+        if not 'engagement_score' in k:
+            s.append("_score*0.01 * doc['"+k+"'].value*" + str(v))
+        # else:
+        #     s.append("doc['engagement_score'].size() > 1 ? _score*0.01 * doc['engagement_score'].value*" + str(v) + " : _score*0.01")
+
+    s = ' + '.join(s)
+
+    if len(s) == 0:
+        s = "_score*0.01"
+
+    print(s)
 
     # ES body
     b = {
@@ -132,7 +149,7 @@ def keySearch(es, must, must_not={}, index=es_index, size=20, boost=0):
                 },
                 "script_score": {
                     "script": {
-                        "source": "(doc['engagement_score'].size() > 1 ? _score*0.01 * doc['engagement_score'].value*" + str(boost) + " : _score*0.01) / " + str(boost)
+                        "source": s
                     }
                 }
             }
@@ -234,7 +251,7 @@ def sigmoid(z):
     return 1 / (1 + math.exp(-x))
 
 
-def format_result(res, extra={}, res_filter=[]):
+def format_result(res, extra={}, res_filter=[], cutoff=None):
     '''
     parse formatting for response
     '''
@@ -255,7 +272,10 @@ def format_result(res, extra={}, res_filter=[]):
     # add extras
     ret.update(extra)
 
-    return ret
+    if cutoff == None or ret['search_score'] >= cutoff:
+        return ret
+    else:
+        return None
 
 
 def bundle_results(items):
@@ -320,11 +340,11 @@ def search(query=''):
     # print entry point
     print('route:', request.endpoint)
 
-    # search query
-    q = ''
-
     # number of records
     size = 20
+
+    # cut off item under score n
+    cutoff = 0.2
 
     # items for view
     items = []
@@ -336,13 +356,24 @@ def search(query=''):
     match = {}
     match_not = {}
 
-    # define default boosting for engagement_score
-    boosting = 1
+    # define default score boostings
+    boosting = {
+        # 'learn_score': 1,
+        # 'explore_score': 1,
+        # 'compete_score': 1,
+        # 'engagement_score': 1,
+    }
 
     # filter response
     res_filter = []
 
     # html-form elements
+    html_mode = {
+        'all': 'checked',
+        'learn': '',
+        'explore': '',
+        'compete': '',
+    }
     html_q_engines = {
         'k': 'checked',
         's': 'checked',
@@ -366,8 +397,10 @@ def search(query=''):
 
     # set default values
     q = ''
+    q_field = 'fulltext'
     q_engines = []
     q_secondary = 'f'
+    model = 'use'
 
     ### POST / GUI ###
     if request.method == 'POST':
@@ -380,140 +413,185 @@ def search(query=''):
     print(dict(r))
 
     # PARSE REQUEST
-    # get search query
-    q = r.get('search') if r.get('search') else ''
+    if len(r) > 0:
+        # get search query
+        q = r.get('search').strip()
 
-    # get query engines
-    # primary search (title)
-    if r.get('k'):
-        q_engines.append('k')
-        html_q_engines['k'] = 'checked'
-    else:
-        html_q_engines['k'] = ''
+        # get query engines
+        # primary search (title)
+        if r.get('k'):
+            q_engines.append('k')
+            html_q_engines['k'] = 'checked'
+        else:
+            html_q_engines['k'] = ''
 
-    if r.get('s'):
-        q_engines.append('s')
-        html_q_engines['s'] = 'checked'
-    else:
-        html_q_engines['s'] = ''
+        if r.get('s'):
+            q_engines.append('s')
+            html_q_engines['s'] = 'checked'
+        else:
+            html_q_engines['s'] = ''
 
-    # field (title / summarization / fulltext)
-    if r.get('field'):
-        q_field = r.get('field')
-        html_q_secondary['t'] = ''
-        html_q_secondary['s'] = ''
-        html_q_secondary['f'] = ''
-        html_q_secondary[r.get('field')[0]] = 'checked'
+        # field (title / summarization / fulltext)
+        if r.get('field'):
+            q_field = r.get('field')
+            html_q_secondary['t'] = ''
+            html_q_secondary['s'] = ''
+            html_q_secondary['f'] = ''
+            html_q_secondary[r.get('field')[0]] = 'checked'
 
-    # word based search
-    # if r.get('solo'):
-    #     solo = True
-    # else:
-    #     solo = False
-    solo = False
+        # word based search
+        # if r.get('solo'):
+        #     solo = True
+        # else:
+        #     solo = False
+        solo = False
 
-    if solo == True:
-        q = q.split(' ')
-    else:
-        q = [q]
+        if solo == True:
+            q = q.split(' ')
+        else:
+            q = [q]
 
-    # get search engines (api)
-    if 'engine' in r:
-        q_engines = r.get('engine').split(' ')
+        # get search engines (api)
+        if 'engine' in r:
+            q_engines = r.get('engine').split(' ')
 
-    # get filters
-    if r.get('category'):
-        match['category'] = r.get('category')
-        show_filter = ''
-    if r.get('category_not'):
-        match['category'] = r.get('category_not')
-        show_filter = ''
+        # get filters
+        if r.get('category'):
+            match['category'] = r.get('category')
+            show_filter = ''
+        if r.get('category_not'):
+            match['category'] = r.get('category_not')
+            show_filter = ''
 
-    if r.get('subcategory'):
-        match_not['subcategory'] = r.get('subcategory')
-        show_filter = ''
-    if r.get('subcategory_not'):
-        match_not['subcategory'] = r.get('subcategory_not')
-        show_filter = ''
+        if r.get('subcategory'):
+            match_not['subcategory'] = r.get('subcategory')
+            show_filter = ''
+        if r.get('subcategory_not'):
+            match_not['subcategory'] = r.get('subcategory_not')
+            show_filter = ''
 
-    if r.get('tags'):
-        match['tags'] = r.get('tags')
-        show_filter = ''
-    if r.get('tags_not'):
-        match_not['tags'] = r.get('tags_not')
-        show_filter = ''
+        if r.get('tags'):
+            match['tags'] = r.get('tags')
+            show_filter = ''
+        if r.get('tags_not'):
+            match_not['tags'] = r.get('tags_not')
+            show_filter = ''
 
-    if r.get('kind'):
-        match['kind'] = r.get('kind')
-        show_filter = ''
-    if r.get('kind_not'):
-        match_not['kind'] = r.get('kind_not')
-        show_filter = ''
+        if r.get('kind'):
+            match['kind'] = r.get('kind')
+            show_filter = ''
+        if r.get('kind_not'):
+            match_not['kind'] = r.get('kind_not')
+            show_filter = ''
 
-    if r.get('ml_libs'):
-        match['ml_libs'] = r.get('ml_libs')
-        show_filter = ''
-    if r.get('ml_libs_not'):
-        match_not['ml_libs'] = r.get('ml_libs_not')
-        show_filter = ''
+        if r.get('ml_libs'):
+            match['ml_libs'] = r.get('ml_libs')
+            show_filter = ''
+        if r.get('ml_libs_not'):
+            match_not['ml_libs'] = r.get('ml_libs_not')
+            show_filter = ''
 
-    if r.get('host'):
-        match['host'] = r.get('host')
-        show_filter = ''
-    if r.get('host_not'):
-        match_not['host'] = r.get('host_not')
-        show_filter = ''
+        if r.get('host'):
+            match['host'] = r.get('host')
+            show_filter = ''
+        if r.get('host_not'):
+            match_not['host'] = r.get('host_not')
+            show_filter = ''
 
-    # switch embedding
-    if r.get('model'):
-        model = r.get('model')
+        # switch embedding
+        if r.get('model'):
+            model = r.get('model')
 
-    # add boosting
-    if r.get('boosting'):
-        # gui
-        if r.get('boosting') == 'true':
-            boosting = 10
-            html_boosting = {
-                'false': '',
-                'true': 'checked',
+        # add boosting
+        # if r.get('boosting'):
+        #     # gui
+        #     if r.get('boosting') == 'true':
+        #         boosting = 10
+        #         html_boosting = {
+        #             'false': '',
+        #             'true': 'checked',
+        #         }
+        #     # api
+        #     elif isinstance(r.get('boosting'), int):
+        #         boosting = r.get('boosting')
+
+        # add mode
+        if r.get('learn'):
+            boosting = {
+                'learn_score': 1,
+                'explore_score': 0,
+                'compete_score': 0,
+                # 'engagement_score': 10,
             }
-        # api
-        elif isinstance(r.get('boosting'), int):
-            boosting = r.get('boosting')
+            html_mode = {
+                'all': '',
+                'learn': 'checked',
+                'explore': '',
+                'compete': '',
+            }
 
-    # apply size
-    if 'size' in r:
-        size = r.get('size')
+        if r.get('explore'):
+            boosting = {
+                'learn_score': 0,
+                'explore_score': 1,
+                'compete_score': 0,
+                # 'engagement_score': 1,
+            }
+            html_mode = {
+                'all': '',
+                'learn': '',
+                'explore': 'checked',
+                'compete': '',
+            }
 
-    # apply bundling
-    if 'bundle' in r:
-        bundle = r.get('bundle')
+        if r.get('compete'):
+            boosting = {
+                'learn_score': 0,
+                'explore_score': 0,
+                'compete_score': 1,
+                # 'engagement_score': 1,
+            }
+            html_mode = {
+                'all': '',
+                'learn': '',
+                'explore': '',
+                'compete': 'checked',
+            }
 
-    # response filter
-    if 'filter' in r:
-        res_filter = r.get('filter').split(' ')
+        # apply size
+        if 'size' in r:
+            size = r.get('size')
 
-    # assing embedding
-    vec = 'use4'
-    # load USE4 model
-    if model == 'use':
-        embedding = embed_use
+        # apply bundling
+        if 'bundle' in r:
+            bundle = r.get('bundle')
+
+        # response filter
+        if 'filter' in r:
+            res_filter = r.get('filter').split(' ')
+
+        print(model)
+        # assing embedding
         vec = 'use4'
-        html_embeddings['use'] = 'checked'
-        html_embeddings['use_large'] = ''
-    # load USE5_large model
-    elif model == 'use_large':
-        embedding = embed_use_large
-        vec = 'use5'
-        html_embeddings['use'] = ''
-        html_embeddings['use_large'] = 'checked'
-    # exit if model is not known
-    else:
-        print('model not defined')
-        sys.exit()
+        # load USE4 model
+        if model == 'use':
+            embedding = embed_use
+            vec = 'use4'
+            html_embeddings['use'] = 'checked'
+            html_embeddings['use_large'] = ''
+        # load USE5_large model
+        elif model == 'use_large':
+            embedding = embed_use_large
+            vec = 'use5'
+            html_embeddings['use'] = ''
+            html_embeddings['use_large'] = 'checked'
+        # exit if model is not known
+        else:
+            print('model not defined')
+            sys.exit()
 
     ### PERFORM QUERY ##
-    if q != '':
+    if q != '' and q != ['']:
         i = 0
         print('###')
         print('search:', q)
@@ -536,9 +614,12 @@ def search(query=''):
             res = keySearch(
                 es, tags, size=size, must_not=match_not, boost=boosting)
             for hit in res['hits']['hits']:
-                items.append(format_result(
-                    hit, extra={'index': 'index'+str(i), 'search': 'k'+q_field[0], 'instance': es_index, 'embedding': model}))
-                i += 1
+                extra = {'index': 'index'+str(i), 'search': 'k' +
+                         q_field[0], 'instance': es_index, 'embedding': model}
+                item = format_result(hit, extra=extra, cutoff=cutoff)
+                if item != None:
+                    items.append(item)
+                    i += 1
 
         # perform semantic search
         if 's' in q_engines:
@@ -550,21 +631,24 @@ def search(query=''):
                 res = semSearch(
                     es, query, tags, embedding, match, size=size, must_not=match_not, boost=boosting)
                 for hit in res['hits']['hits']:
-                    items.append(format_result(
-                        hit, extra={'index': 'index'+str(i), 'search': 's'+q_field[0], 'instance': es_index, 'embedding': model}))
-                    i += 1
+                    extra = {
+                        'index': 'index'+str(i), 'search': 's'+q_field[0], 'instance': es_index, 'embedding': model}
+                    item = format_result(hit, extra=extra, cutoff=cutoff)
+                    if item != None:
+                        items.append(item)
+                        i += 1
 
-    # bundle items (similar matches by engine get grouped together)
-    if bundle == True:
-        items = bundle_results(items)
+        # bundle items (similar matches by engine get grouped together)
+        if bundle == True:
+            items = bundle_results(items)
 
-    # cut items
-    if bundle == False:
-        items = items[:int(size)]
+        # cut items
+        if bundle == False:
+            items = items[:int(size)]
 
-    # filter response
-    if len(res_filter) > 0:
-        items = filter_response(items, res_filter)
+        # filter response
+        if len(res_filter) > 0:
+            items = filter_response(items, res_filter)
 
     # runtime
     end = time.time()
@@ -579,7 +663,7 @@ def search(query=''):
     # return view to gui endpoint
     if request.endpoint == 'gui':
         match['query'] = ' '.join(q)
-        return render_template('index.html', query=match, query_not=match_not, query_engines=html_q_engines, query_secondary=html_q_secondary, boosting=html_boosting, embeddings=html_embeddings, items=items, show_filter=show_filter, runtime=dur, js=html_guide)
+        return render_template('index.html', query=match, query_not=match_not, query_engines=html_q_engines, query_secondary=html_q_secondary, query_mode=html_mode, boosting=html_boosting, embeddings=html_embeddings, items=items, show_filter=show_filter, runtime=dur, js=html_guide)
 
     # return json to api endpoint
     if request.endpoint == 'api':

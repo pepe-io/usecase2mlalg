@@ -14,13 +14,14 @@ print(len(sys.argv), sys.argv)
 # quit if arguments missing
 if len(sys.argv) == 1 or not '-' in sys.argv[1]:
     print('use "-up" or "-down" to setup your elasticsearch instance')
-    print('use "-ingest" to ingest data into the index')
+    print('use "-index" to ingest data into the index')
+    print('use "-update" to update data (except vectors)')
     print('provide a dataset or "*" as second argument')
     sys.exit()
 else:
     mode = sys.argv[1]
 
-if mode == '-ingest':
+if mode == '-index' or mode == '-update':
     if len(sys.argv) < 3:
         print('second argument missing')
         print('provide a dataset or "*" as second argument')
@@ -142,6 +143,15 @@ mapping = {
     "ml_score": {
         "type": "float"
     },
+    "learn_score": {
+        "type": "float"
+    },
+    "explore_score": {
+        "type": "float"
+    },
+    "compete_score": {
+        "type": "float"
+    },
     "engagement_score": {
         "type": "float"
     },
@@ -177,29 +187,30 @@ if mode == '-down':
 
 
 # ingest
-if mode == '-ingest':
+if mode == '-index' or mode == '-update':
     # config
     FORCE_QUIT = 0          # 0 ... disable
     STORE_CHUNKS = True     # store chunks of 1000 records
     CHUNK_SIZE = 500
 
-    # load embedding
-    embeddings = {}
-    # load USE4 model
-    print('load USE4 embedding')
-    use4_start = time.time()
-    embeddings['use4'] = hub.load("./.USE4/")
-    use4_end = time.time()
-    print('loaded ('+str(round(use4_end-use4_start, 3))+'sec)')
-    print('##################################################')
+    if mode == '-index':
+        # load embedding
+        embeddings = {}
+        # load USE4 model
+        print('load USE4 embedding')
+        use4_start = time.time()
+        embeddings['use4'] = hub.load("./.USE4/")
+        use4_end = time.time()
+        print('loaded ('+str(round(use4_end-use4_start, 3))+'sec)')
+        print('##################################################')
 
-    # load USE5_large model
-    print('load USE5_large embedding')
-    use5_start = time.time()
-    embeddings['use5'] = hub.load("./.USE5_large/")
-    use5_end = time.time()
-    print('loaded ('+str(round(use5_end-use5_start, 3))+'sec)')
-    print('##################################################')
+        # load USE5_large model
+        print('load USE5_large embedding')
+        use5_start = time.time()
+        embeddings['use5'] = hub.load("./.USE5_large/")
+        use5_end = time.time()
+        print('loaded ('+str(round(use5_end-use5_start, 3))+'sec)')
+        print('##################################################')
 
     # load dataset
     path = '../data/database/json/'
@@ -232,8 +243,8 @@ if mode == '-ingest':
 
             with open(fp, encoding='utf-8') as f:
 
-                id = file.replace('.json', '')
-                # print(id)
+                id_ = file.replace('.json', '')
+                # print(id_)
 
                 raw = f.read()
                 raw = json.loads(raw)
@@ -265,7 +276,7 @@ if mode == '-ingest':
                     skip = True
                 elif not raw['language_code'] in languages:
                     print('skipped - wrong language: "' +
-                          raw['language_code']+'"')
+                          str(raw['language_code'])+'"')
                     skip = True
 
                 # skip record if description is missing
@@ -345,15 +356,22 @@ if mode == '-ingest':
                     # store fulltext
                     record['fulltext'] = ft
 
-                    # create vectors
-                    vectorize = ['title', 'summarization', 'fulltext']
-                    for field in vectorize:
-                        # print(field)
-                        for embed in embeddings.keys():
-                            # print(embed)
-                            vec = tf.make_ndarray(tf.make_tensor_proto(
-                                embeddings[embed]([record[field]]))).tolist()[0]
-                            record[field+'_vector_'+embed] = vec
+                    # convert scores to float
+                    for r in record:
+                        if 'score' in r and r != '':
+                            #print(i, record[i], type(record[i]))
+                            record[r] = float(record[r])
+
+                    if mode == '-index':
+                        # create vectors
+                        vectorize = ['title', 'summarization', 'fulltext']
+                        for field in vectorize:
+                            # print(field)
+                            for embed in embeddings.keys():
+                                # print(embed)
+                                vec = tf.make_ndarray(tf.make_tensor_proto(
+                                    embeddings[embed]([record[field]]))).tolist()[0]
+                                record[field+'_vector_'+embed] = vec
 
                     # print(record)
                     # sys.exit()
@@ -363,12 +381,23 @@ if mode == '-ingest':
 
                     # res = es.index(index=index, body=b)
                     # print(res)
-                    bulk.append({
-                        "index": {
-                            "_id": id
-                        }
-                    })
-                    bulk.append(record)
+                    if mode == '-index':
+                        bulk.append({
+                            "index": {
+                                "_id": id_
+                            }
+                        })
+                        bulk.append(record)
+                    else:
+                        bulk.append({
+                            "update": {
+                                "_id": id_
+                            }
+                        })
+                        bulk.append({"doc": record})
+
+                        # res = es.update(index=index, id=id_,
+                        #                 body={"doc": record})
 
                     # keep count of rows processed
                     i += 1

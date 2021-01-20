@@ -1,7 +1,8 @@
 {% extends 'base.html' %} {% block head %}
 <title>usecase2ml - search</title>
 {% endblock %} {% block body %}
-<div class="container">
+<div class="container min-vh-100">
+  <!-- d-flex flex-column justify-content-center align-items-center -->
   <div class="row mt-3">
     <!-- Search Field -->
     <div class="container">
@@ -18,6 +19,33 @@
               name="search"
               value="{{ query.query }}"
             />
+          </div>
+        </div>
+
+        <!-- Mode -->
+        <div id="mode" class="">
+          <div class="form-group row">
+            <div class="col-sm-2">Mode</div>
+            <div class="col-sm-10">
+              <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                <label class="btn btn-secondary">
+                  <input type="radio" name="all" id="all" class="toggle"
+                  autocomplete="off" {{ query_mode['all'] }} /> All
+                </label>
+                <label class="btn btn-secondary">
+                  <input type="radio" name="learn" id="learn" class="toggle"
+                  autocomplete="off" {{ query_mode['learn'] }} /> Learn
+                </label>
+                <label class="btn btn-secondary">
+                  <input type="radio" name="explore" id="explore" class="toggle"
+                  autocomplete="off" {{ query_mode['explore'] }} /> Explore
+                </label>
+                <label class="btn btn-secondary">
+                  <input type="radio" name="compete" id="compete" class="toggle"
+                  autocomplete="off" {{ query_mode['compete'] }} /> Compete
+                </label>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -84,28 +112,6 @@
                       Full Text
                     </label>
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Embeddings -->
-          <div id="embeddings" class="">
-            <div class="form-group row">
-              <div class="col-sm-2">Embedding</div>
-              <div class="col-sm-10">
-                <div class="form-check">
-                  <input class="form-check-input" type="radio" name="model"
-                  id="use" value="use" {{ embeddings['use'] }} />
-                  <label class="form-check-label" for="use"> USE4 (DAN) </label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="radio" name="model"
-                  id="use_large" value="use_large" {{ embeddings['use_large'] }}
-                  />
-                  <label class="form-check-label" for="use_large">
-                    USE5 large (Transformer)
-                  </label>
                 </div>
               </div>
             </div>
@@ -288,8 +294,30 @@
             </div>
           </div>
 
+          <!-- Embeddings -->
+          <div id="embeddings" class="">
+            <div class="form-group row">
+              <div class="col-sm-2">Embedding</div>
+              <div class="col-sm-10">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="model"
+                  id="use" value="use" {{ embeddings['use'] }} />
+                  <label class="form-check-label" for="use"> USE4 (DAN) </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="model"
+                  id="use_large" value="use_large" {{ embeddings['use_large'] }}
+                  />
+                  <label class="form-check-label" for="use_large">
+                    USE5 large (Transformer)
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Boosting -->
-          <div id="boosting" class="">
+          <!-- <div id="boosting" class="">
             <div class="form-group row">
               <div class="col-sm-2">Boosting</div>
               <div class="col-sm-10">
@@ -309,7 +337,7 @@
                 </div>
               </div>
             </div>
-          </div>
+          </div> -->
         </div>
 
         <!-- Options Toggle -->
@@ -470,6 +498,24 @@
                       {% if item.ml_score is defined %}
                       <div class="col-sm-2 font-weight-bold">ml score</div>
                       <div class="col-sm-10">{{ item.ml_score }}</div>
+                      {% endif %}
+
+                      <!-- learn_score -->
+                      {% if item.learn_score is defined %}
+                      <div class="col-sm-2 font-weight-bold">learn score</div>
+                      <div class="col-sm-10">{{ item.learn_score }}</div>
+                      {% endif %}
+
+                      <!-- explore_score -->
+                      {% if item.explore_score is defined %}
+                      <div class="col-sm-2 font-weight-bold">explore score</div>
+                      <div class="col-sm-10">{{ item.explore_score }}</div>
+                      {% endif %}
+
+                      <!-- compete_score -->
+                      {% if item.compete_score is defined %}
+                      <div class="col-sm-2 font-weight-bold">compete score</div>
+                      <div class="col-sm-10">{{ item.compete_score }}</div>
                       {% endif %}
 
                       <!-- date -->
