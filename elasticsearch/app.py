@@ -38,6 +38,8 @@ options = {
     'score_treshold': 0.1,
     'bundle_items': True,
     'cutoff_items': False,
+    'aggregations': True,
+    'ngrams': True,
     'max_items_aggregations': 10,
 }
 
@@ -266,59 +268,67 @@ def basic_clean(text):
 
 
 def parse_aggregations(items):
-    aggs = {
-        # 'agg_name': 'field_name',
-        'categories': 'category',
-        'subcategories': 'subcategory',
-        'tags': 'tags',
-        'libs': 'ml_libs',
-        'sources': 'host',
-        'kinds': 'kind',
-        'licenses': 'license',
-        'languages': 'programming_language',
-    }
-    a = {
-        'categories': [],
-        'subcategories': [],
-        'tags': [],
-        'libs': [],
-        'sources': [],
-        'kinds': [],
-        'licenses': [],
-        'languages': [],
-    }
+    if options['aggregations']:
+        aggs = {
+            # 'agg_name': 'field_name',
+            'categories': 'category',
+            'subcategories': 'subcategory',
+            'tags': 'tags',
+            'libs': 'ml_libs',
+            'sources': 'host',
+            'kinds': 'kind',
+            'licenses': 'license',
+            'languages': 'programming_language',
+        }
+        a = {
+            'categories': [],
+            'subcategories': [],
+            'tags': [],
+            'libs': [],
+            'sources': [],
+            'kinds': [],
+            'licenses': [],
+            'languages': [],
+        }
+    else:
+        a = {}
+
     words = ''
     for i in items:
-        words += ' ' + i['_source']['summarization']
-        for k, v in aggs.items():
-            if v in i['_source']:
-                j = i['_source'][v]
-                if isinstance(j, list):
-                    a[k].extend(j)
-                elif isinstance(j, str):
-                    a[k].append(j)
+        if options['ngrams']:
+            words += ' ' + i['_source']['summarization']
+        if options['aggregations']:
+            for k, v in aggs.items():
+                if v in i['_source']:
+                    j = i['_source'][v]
+                    if isinstance(j, list):
+                        a[k].extend(j)
+                    elif isinstance(j, str):
+                        a[k].append(j)
 
-    for k, v in a.items():
-        # sort
-        a[k] = dict(sorted(dict(Counter(v)).items(),
-                           key=lambda item: item[1], reverse=True))
-        # restrict count
-        a[k] = dict(list(a[k].items())[:options['max_items_aggregations']])
+    if options['aggregations']:
+        for k, v in a.items():
+            # sort
+            a[k] = dict(sorted(dict(Counter(v)).items(),
+                               key=lambda item: item[1], reverse=True))
+            # restrict count
+            a[k] = dict(list(a[k].items())[:options['max_items_aggregations']])
 
     # n-grams
-    words = basic_clean(''.join(str(words)))
-    names = ['onegram', 'twogram', 'threegram']
-    for i in range(1, 4):
-        n = nltk.ngrams(words, i)
-        # sort
-        n = dict(sorted(dict(Counter(n)).items(),
-                        key=lambda item: item[1], reverse=True))
-        # restrict count
-        n = dict(list(n.items())[:options['max_items_aggregations']])
-        # join
-        n = {' '.join(x): y for x, y in n.items()}
-        # store
-        a[names[i-1]] = n
+    if options['ngrams']:
+        words = basic_clean(''.join(str(words)))
+        names = ['onegram', 'twogram', 'threegram']
+        for i in range(1, 4):
+            n = nltk.ngrams(words, i)
+            # sort
+            n = dict(sorted(dict(Counter(n)).items(),
+                            key=lambda item: item[1], reverse=True))
+            # restrict count
+            n = dict(list(n.items())[:options['max_items_aggregations']])
+            # join
+            n = {' '.join(x): y for x, y in n.items()}
+            # store
+            a[names[i-1]] = n
 
     return a
 
@@ -729,7 +739,7 @@ def search(query='', options=options, guide=guide):
     q_engines = ['k', 's']
     q_secondary = q_field[0]
     aggregations = aggregations_key = aggregations_sem = {}
-    aggs_checked = ['categories', 'tags', 'libs', 'onegram']
+    aggs_checked = ['categories', 'tags', 'libs']
 
     ### POST / GUI ###
     if request.method == 'POST':
