@@ -11,6 +11,10 @@ import time
 from elasticsearch import Elasticsearch
 import tensorflow as tf
 import tensorflow_hub as hub
+import nltk
+import re
+import unicodedata
+from nltk.corpus import stopwords
 
 # start runtime measure
 start = time.time()
@@ -28,8 +32,8 @@ es_index = 'usecase2ml_aggs'
 # options & debug
 options = {
     'use4': True,
-    'use5': False,
-    'default_embedding': 'use4',
+    'use5': True,
+    'default_embedding': 'use5',
     'max_results': 20,
     'score_treshold': 0.1,
     'bundle_items': True,
@@ -245,6 +249,22 @@ def parse_es_aggregations(aggs_raw):
     return aggs
 
 
+def basic_clean(text):
+    """
+    A simple function to clean up the data. All the words that
+    are not designated as a stop word is then lemmatized after
+    encoding and basic regex parsing are performed.
+    """
+    wnl = nltk.stem.WordNetLemmatizer()
+    stopwords = nltk.corpus.stopwords.words('english')
+    text = (unicodedata.normalize('NFKD', text)
+            .encode('ascii', 'ignore')
+            .decode('utf-8', 'ignore')
+            .lower())
+    words = re.sub(r'[^\w\s]', '', text).split()
+    return [wnl.lemmatize(word) for word in words if word not in stopwords]
+
+
 def parse_aggregations(items):
     aggs = {
         # 'agg_name': 'field_name',
@@ -267,9 +287,10 @@ def parse_aggregations(items):
         'licenses': [],
         'languages': [],
     }
+    words = ''
     for i in items:
+        words += ' ' + i['_source']['summarization']
         for k, v in aggs.items():
-            print(k, v)
             if v in i['_source']:
                 j = i['_source'][v]
                 if isinstance(j, list):
@@ -283,6 +304,21 @@ def parse_aggregations(items):
                            key=lambda item: item[1], reverse=True))
         # restrict count
         a[k] = dict(list(a[k].items())[:options['max_items_aggregations']])
+
+    # n-grams
+    words = basic_clean(''.join(str(words)))
+    names = ['onegram', 'twogram', 'threegram']
+    for i in range(1, 4):
+        n = nltk.ngrams(words, i)
+        # sort
+        n = dict(sorted(dict(Counter(n)).items(),
+                        key=lambda item: item[1], reverse=True))
+        # restrict count
+        n = dict(list(n.items())[:options['max_items_aggregations']])
+        # join
+        n = {' '.join(x): y for x, y in n.items()}
+        # store
+        a[names[i-1]] = n
 
     return a
 
@@ -693,7 +729,7 @@ def search(query='', options=options, guide=guide):
     q_engines = ['k', 's']
     q_secondary = q_field[0]
     aggregations = aggregations_key = aggregations_sem = {}
-    aggs_checked = ['categories', 'tags', 'libs']
+    aggs_checked = ['categories', 'tags', 'libs', 'onegram']
 
     ### POST / GUI ###
     if request.method == 'POST':
@@ -894,7 +930,9 @@ def search(query='', options=options, guide=guide):
             tags = {q_field: q}
             if q_field == 'fulltext':
                 tags = {'title': q,
-                        'summarization': q, 'fulltext': q}
+                        'summarization_lemmatized': q, 'fulltext': q}
+            elif q_field == 'summarization':
+                tags = {'summarization_lemmatized': q}
 
             # append match filters
             tags.update(match)

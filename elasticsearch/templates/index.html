@@ -103,20 +103,6 @@
               <li class="nav-item">
                 <div class="nav-link">
                   <input
-                    class="form-control form-control-sm filter {% if match.kind|length > 0 %} is-valid {% endif %}"
-                    type="text"
-                    placeholder="kind"
-                    id="kind"
-                    name="kind"
-                    value="{{ match.kind }}"
-                    autocomplete="off"
-                    list="kind_list"
-                  />
-                </div>
-              </li>
-              <li class="nav-item">
-                <div class="nav-link">
-                  <input
                     class="form-control form-control-sm filter {% if match.ml_libs|length > 0 %} is-valid {% endif %}"
                     type="text"
                     placeholder="ML libraries"
@@ -125,6 +111,20 @@
                     value="{{ match.ml_libs }}"
                     autocomplete="off"
                     list="libs_list"
+                  />
+                </div>
+              </li>
+              <li class="nav-item">
+                <div class="nav-link">
+                  <input
+                    class="form-control form-control-sm filter {% if match.kind|length > 0 %} is-valid {% endif %}"
+                    type="text"
+                    placeholder="kind"
+                    id="kind"
+                    name="kind"
+                    value="{{ match.kind }}"
+                    autocomplete="off"
+                    list="kind_list"
                   />
                 </div>
               </li>
@@ -160,20 +160,6 @@
                 <li class="nav-item">
                   <div class="nav-link">
                     <input
-                      class="form-control form-control-sm filter {% if match_not.host|length > 0 %} is-invalid {% endif %}"
-                      type="text"
-                      placeholder="source not"
-                      id="host_not"
-                      name="host_not"
-                      value="{{ match_not.host }}"
-                      autocomplete="off"
-                      list="host_list"
-                    />
-                  </div>
-                </li>
-                <li class="nav-item">
-                  <div class="nav-link">
-                    <input
                       class="form-control form-control-sm filter {% if match_not.kind|length > 0 %} is-invalid {% endif %}"
                       type="text"
                       placeholder="kind not"
@@ -182,6 +168,20 @@
                       value="{{ match_not.kind }}"
                       autocomplete="off"
                       list="kind_list"
+                    />
+                  </div>
+                </li>
+                <li class="nav-item">
+                  <div class="nav-link">
+                    <input
+                      class="form-control form-control-sm filter {% if match_not.host|length > 0 %} is-invalid {% endif %}"
+                      type="text"
+                      placeholder="source not"
+                      id="host_not"
+                      name="host_not"
+                      value="{{ match_not.host }}"
+                      autocomplete="off"
+                      list="host_list"
                     />
                   </div>
                 </li>
@@ -413,7 +413,7 @@
               </td>
               <td class="col-sm-8">
                 <a
-                      onClick="toggle({{ item.index }});"
+                      onClick="toggle('{{ item.index }}');"
                       href="javascript:;"
                       >{{ item.title }}</a
                     >
