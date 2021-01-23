@@ -27,12 +27,16 @@ if mode == '-index' or mode == '-update':
         print('provide a dataset or "*" as second argument')
         sys.exit()
     else:
-        dataset = sys.argv[2]
+        dataset = sys.argv[2].split('+')
 else:
     dataset = None
 
 # es instance name
 index = 'usecase2mlalg'
+index = 'usecase2mlalg_lemma'
+index = 'usecase2mlalg_descriptive'
+index = 'usecase2ml'
+index = 'usecase2ml_aggs'
 
 # set treshold for category and subcategory score
 treshold = 0.5
@@ -76,6 +80,10 @@ mapping = {
         "type": "text",
         "analyzer": "english"
     },
+    "summarization_lemmatized": {
+        "type": "text",
+        "analyzer": "english"
+    },
     "summarization_vector_use4": {
         "type": "dense_vector",
         "dims": 512
@@ -106,39 +114,92 @@ mapping = {
         "type": "text"
     },
     "source": {
-        "type": "text"
+        "type": "text",
+        "fields": {
+            "keyword": {
+                "type": "keyword"
+            }
+        }
     },
     "category": {
         "type": "text",
-        "analyzer": "english"
+        "analyzer": "english",
+        "fields": {
+            "keyword": {
+                "type": "keyword"
+            }
+        }
     },
     "category_score": {
         "type": "float"
     },
     "subcategory": {
         "type": "text",
-        "analyzer": "english"
+        "analyzer": "english",
+        "fields": {
+            "keyword": {
+                "type": "keyword"
+            }
+        }
     },
     "subcategory_score": {
         "type": "float"
     },
     "tags": {
-        "type": "text"
+        "type": "text",
+        "fields": {
+            "keyword": {
+                "type": "keyword"
+            }
+        }
+    },
+    "tags_descriptive": {
+        "type": "text",
+        "fields": {
+            "keyword": {
+                "type": "keyword"
+            }
+        }
     },
     "kind": {
-        "type": "text"
+        "type": "text",
+        "fields": {
+            "keyword": {
+                "type": "keyword"
+            }
+        }
     },
     "ml_libs": {
-        "type": "text"
+        "type": "text",
+        "fields": {
+            "keyword": {
+                "type": "keyword"
+            }
+        }
     },
     "host": {
-        "type": "text"
+        "type": "text",
+        "fields": {
+            "keyword": {
+                "type": "keyword"
+            }
+        }
     },
     "license": {
-        "type": "text"
+        "type": "text",
+        "fields": {
+            "keyword": {
+                "type": "keyword"
+            }
+        }
     },
     "programming_language": {
-        "type": "text"
+        "type": "text",
+        "fields": {
+            "keyword": {
+                "type": "keyword"
+            }
+        }
     },
     "ml_score": {
         "type": "float"
@@ -216,12 +277,11 @@ if mode == '-index' or mode == '-update':
     path = '../data/database/json/'
     subfolder = os.listdir(path)
 
-    if dataset == '*':
+    if '*' in dataset:
         folders = subfolder
     else:
-        if dataset in subfolder:
-            folders = [dataset]
-        else:
+        folders = set(dataset) & set(subfolder)
+        if len(folders) == 0:
             print('dataset not found:', dataset)
             print('datasets available:', subfolder)
             sys.exit()
@@ -260,6 +320,15 @@ if mode == '-index' or mode == '-update':
                     if key in raw and raw[key] != '':
                         record[key] = raw[key]
 
+                # if 'description_lemmatized' in raw:
+                #     record['description'] = raw['description_lemmatized']
+
+                # if 'summarization_lemmatized' in raw:
+                #     record['summarization'] = raw['summarization_lemmatized']
+
+                # if 'tags_descriptive' in raw:
+                #     record['tags'] = raw['tags_descriptive']
+
                 skip = False
 
                 print(i, record['link'])
@@ -291,6 +360,9 @@ if mode == '-index' or mode == '-update':
                     if not 'summarization' in record:
                         record['summarization'] = raw['description'] if 'description' in raw else ''
 
+                    if not 'summarization_lemmatized' in record:
+                        record['summarization_lemmatized'] = raw['description_lemmatized'] if 'description_lemmatized' in raw else ''
+
                     # print(record)
                     # sys.exit()
 
@@ -302,12 +374,18 @@ if mode == '-index' or mode == '-update':
                             print('dropped - category')
                             record.pop('category')
                             record.pop('category_score')
+                        else:
+                            record['category_score'] = round(
+                                record['category_score'], 3)
 
                     if 'subcategory' in record:
                         if record['subcategory_score'] < treshold:
                             print('dropped - subcategory')
                             record.pop('subcategory')
                             record.pop('subcategory_score')
+                        else:
+                            record['subcategory_score'] = round(
+                                record['subcategory_score'], 3)
 
                     # convert date-strings to datetime objects
                     if 'date_project' in record:
@@ -346,11 +424,11 @@ if mode == '-index' or mode == '-update':
                         ft = s + '. ' + ft
 
                     # append tags
-                    if 'tags' in record:
-                        if isinstance(record['tags'], list):
-                            s = ', '.join(record['tags'])
+                    if 'tags_descriptive' in record:
+                        if isinstance(record['tags_descriptive'], list):
+                            s = ', '.join(record['tags_descriptive'])
                         else:
-                            s = record['tags']
+                            s = record['tags_descriptive']
                         ft = ft + s
 
                     # store fulltext
@@ -364,14 +442,17 @@ if mode == '-index' or mode == '-update':
 
                     if mode == '-index':
                         # create vectors
-                        vectorize = ['title', 'summarization', 'fulltext']
+                        vectorize = [
+                            'title', 'summarization_lemmatized', 'fulltext']
                         for field in vectorize:
                             # print(field)
                             for embed in embeddings.keys():
                                 # print(embed)
                                 vec = tf.make_ndarray(tf.make_tensor_proto(
                                     embeddings[embed]([record[field]]))).tolist()[0]
-                                record[field+'_vector_'+embed] = vec
+                                name = field.replace(
+                                    '_lemmatized', '')+'_vector_'+embed
+                                record[name] = vec
 
                     # print(record)
                     # sys.exit()

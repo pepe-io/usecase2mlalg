@@ -10,32 +10,230 @@
     />
     <link
       rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.5.3/css/bootstrap.min.css"
-    />
-    <!-- <link
-      rel="stylesheet"
       href="{{ url_for('static', filename='css/bootstrap.min.css') }}"
-    /> -->
+    />
+    <link
+      href="{{ url_for('static', filename='css/dashboard.css') }}"
+      rel="stylesheet"
+    />
     <link
       rel="stylesheet"
-      href="https://cdn.datatables.net/1.10.22/css/jquery.dataTables.min.css"
+      href="{{ url_for('static', filename='css/jquery.dataTables.min.css') }}"
     />
     <link
       rel="stylesheet"
       href="{{ url_for('static', filename='css/main.css') }}"
     />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/token-autocomplete.css') }}"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css"
+    />
+    <style>
+      .bg {
+        background-color: grey;
+      }
+      .btn-group-xs > .btn,
+      .btn-xs {
+        padding: 0.25rem 0.4rem;
+        font-size: 0.875rem;
+        line-height: 1;
+        border-radius: 0.2rem;
+      }
+      .sidebar,
+      .navbar-brand {
+        min-width: 212px !important;
+      }
+      .btn-group-block {
+        width: 100%;
+      }
+      .bottom {
+        position: relative;
+        bottom: 20px;
+      }
+      .chart {
+        width: 200px;
+        height: 100px;
+      }
+
+      .select-wrapper {
+        margin: auto;
+        max-width: 600px;
+        width: calc(100% - 40px);
+      }
+
+      /* select */
+      .select-pure__select {
+        align-items: center;
+        background: #f9f9f8;
+        border-radius: 4px;
+        border: 1px solid rgba(0, 0, 0, 0.15);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+        box-sizing: border-box;
+        color: #6c757d;
+        cursor: pointer;
+        display: flex;
+        /* font-size: 16px;
+        font-weight: 500; */
+        justify-content: left;
+        min-height: calc(1.5em + 0.5rem + 2px);
+        padding: 5px 10px;
+        position: relative;
+        transition: 0.2s;
+        width: 100%;
+      }
+
+      /* dropdown */
+      .select-pure__options {
+        border-radius: 4px;
+        border: 1px solid rgba(0, 0, 0, 0.15);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+        box-sizing: border-box;
+        color: #6c757d;
+        display: none;
+        left: 0;
+        max-height: 221px;
+        overflow-y: scroll;
+        position: absolute;
+        /* top: 50px; */
+        width: 100%;
+        z-index: 5;
+      }
+
+      /* dropdownShown */
+      .select-pure__select--opened .select-pure__options {
+        display: block;
+      }
+
+      /* option */
+      .select-pure__option {
+        background: #fff;
+        border-bottom: 1px solid #e4e4e4;
+        box-sizing: border-box;
+        height: 44px;
+        line-height: 25px;
+        padding: 10px;
+      }
+
+      /* selectedOption */
+      .select-pure__option--selected {
+        color: #e4e4e4;
+        cursor: initial;
+        pointer-events: none;
+      }
+
+      /* optionHidden */
+      .select-pure__option--hidden {
+        display: none;
+      }
+
+      /* selectedLabel */
+      .select-pure__selected-label {
+        background: #6c757d;
+        border-radius: 4px;
+        color: #fff;
+        cursor: initial;
+        display: inline-block;
+        margin: 2px 4px 4px 0;
+        padding: 2px 7px;
+      }
+
+      .select-pure__selected-label:last-of-type {
+        margin-right: 0;
+      }
+
+      .select-pure__selected-label i {
+        cursor: pointer;
+        display: inline-block;
+        margin-left: 7px;
+      }
+
+      .select-pure__selected-label i:hover {
+        color: #e4e4e4;
+      }
+
+      /* autocompleteInput */
+      .select-pure__autocomplete {
+        background: #f9f9f8;
+        border-bottom: 1px solid #e4e4e4;
+        border-left: none;
+        border-right: none;
+        border-top: none;
+        box-sizing: border-box;
+        font-size: 16px;
+        outline: none;
+        padding: 10px;
+        width: 100%;
+      }
+    </style>
+    <script>
+      {% for k, v in aggregations.items() %}
+        var {{ k }} = {{ v|safe }};
+      {% endfor %}
+    </script>
+    <script>
+      var charts_selected = {{ aggs_checked| tojson }};
+    </script>
     {% block head %}{% endblock %}
   </head>
-  <body>
+  <body class="h-100">
     {% block body %}{% endblock %}
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-    <script src="https://cdn.datatables.net/1.10.22/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.6.0/js/bootstrap.min.js"></script>
+    <script src="{{ url_for('static', filename='js/jquery.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/jquery.dataTables.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/popper.min.js') }}"></script>
+    <!-- Icons -->
+    <script src="{{ url_for('static', filename='js/feather.min.js') }}"></script>
+    <script>
+      feather.replace();
+    </script>
+    <!-- tags -->
+    <script src="{{ url_for('static', filename='js/bundle.min.js') }}"></script>
+    <script>
+      const myOptions = [
+        {
+          label: "New York",
+          value: "NY",
+        },
+        {
+          label: "Washington",
+          value: "WA",
+        },
+        {
+          label: "California",
+          value: "CA",
+        },
+        {
+          label: "New Jersey",
+          value: "NJ",
+        },
+        {
+          label: "North Carolina",
+          value: "NC",
+        },
+      ];
+
+      var instance = new SelectPure(".example", {
+        options: myOptions,
+        placeholder: false,
+        multiple: true, // default: false
+        autocomplete: true, // default: false
+        value: ["NY", "CA"],
+        icon: "fa fa-times",
+        onChange: (value) => {
+          $("input#category").val(value);
+        },
+      });
+    </script>
+    <!-- BASIC -->
     <script>
       $(document).ready(function () {
         $("#myTable").DataTable({
           order: [
-            [0, "asc"],
+            // [0, "asc"],
             [1, "desc"],
           ],
           paging: false,
@@ -44,23 +242,84 @@
         });
       });
 
-      $(document).ready(function () {
-        $(".toggle").click(function () {
-          // $(this).button("toggle");
+      // show chart
+      function show_chart(id) {
+        console.log("show_chart", id);
+        $("#card_" + id).toggle();
+        // remove item
+        if (charts_selected.includes(id)) {
+          charts_selected = charts_selected.filter((item) => item !== id);
+        }
+        // add item
+        else {
+          charts_selected.push(id);
+        }
+        document.getElementById(
+          "charts_selected"
+        ).value = charts_selected.toString();
+        console.log("selected", Object.values(charts_selected));
+      }
 
-          var buttons = $("input.toggle");
-          buttons.prop("checked", false);
-          buttons.button("dispose");
+      // $(document).ready(function () {
+      //   $(".toggle").click(function () {
+      //     // $(this).button("toggle");
 
-          var button = $("input#" + this.id);
-          button.prop("checked", true);
-        });
-      });
+      //     var buttons = $("input.toggle");
+      //     buttons.prop("checked", false);
+      //     buttons.button("dispose");
+
+      //     var button = $("input#" + this.id);
+      //     button.prop("checked", true);
+      //   });
+      // });
 
       function toggle(id) {
-        console.log(id);
+        console.log("toggle", id);
         $(id).slideToggle();
       }
+    </script>
+    <!-- Graphs -->
+    <script src="{{ url_for('static', filename='js/Chart.min.js') }}"></script>
+    <script>
+      var options = {
+        // scales: {
+        //   yAxes: [
+        //     {
+        //       ticks: {
+        //         beginAtZero: false,
+        //       },
+        //     },
+        //   ],
+        // },
+        legend: {
+          display: false,
+        },
+      };
+      var datasets = {
+        lineTension: 0,
+        backgroundColor: "transparent",
+        borderColor: "#007bff",
+        borderWidth: 1,
+        pointBackgroundColor: "#007bff",
+      };
+      {% for k, v in aggregations.items() %}
+      var ctx = document.getElementById("chart_{{ k }}");
+      var chart_{{ k }} = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: Object.keys({{ k }}),
+          datasets: [
+            Object.assign(
+              {
+                data: Object.values({{ k }}),
+              },
+              datasets
+            ),
+          ],
+        },
+        options: options,
+      });
+      {% endfor %}
     </script>
   </body>
 </html>
