@@ -2,6 +2,7 @@
 from flask import Flask, render_template, request, send_from_directory, Response
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from collections import Counter
 import json
 import math
 import os
@@ -28,11 +29,12 @@ es_index = 'usecase2ml_aggs'
 options = {
     'use4': True,
     'use5': False,
+    'default_embedding': 'use4',
     'max_results': 20,
     'score_treshold': 0.1,
     'bundle_items': True,
     'cutoff_items': False,
-    'default_embedding': 'use4'
+    'max_items_aggregations': 10,
 }
 
 debug = {
@@ -45,6 +47,10 @@ debug = {
     'print_request_args': False,
     'print_first_record': False,
     'print_aggregations': False,
+}
+
+debug_view = {
+    'print_fulltext': False,
 }
 
 # connect to ES on localhost on port 9200
@@ -83,11 +89,11 @@ if options['use5']:
 embed = embed_use
 
 # load gui guide
-html_guide = './templates/guide.json'
-if os.path.isfile(html_guide):
-    with open(html_guide, 'r', encoding='utf-8', errors="ignore") as fp:
-        html_guide = fp.read()
-        html_guide = json.loads(html_guide)
+guide = './templates/guide.json'
+if os.path.isfile(guide):
+    with open(guide, 'r', encoding='utf-8', errors="ignore") as fp:
+        guide = fp.read()
+        guide = json.loads(guide)
 else:
     print('guide not found')
     sys.exit()
@@ -225,7 +231,7 @@ def get_es_aggregations():
     }
 
 
-def parse_aggregations(aggs_raw):
+def parse_es_aggregations(aggs_raw):
     '''
     parse aggregations from elasticsearch
     return a cleaned up dict
@@ -237,6 +243,48 @@ def parse_aggregations(aggs_raw):
         }
         aggs.update(agg)
     return aggs
+
+
+def parse_aggregations(items):
+    aggs = {
+        # 'agg_name': 'field_name',
+        'categories': 'category',
+        'subcategories': 'subcategory',
+        'tags': 'tags',
+        'libs': 'ml_libs',
+        'sources': 'host',
+        'kinds': 'kind',
+        'licenses': 'license',
+        'languages': 'programming_language',
+    }
+    a = {
+        'categories': [],
+        'subcategories': [],
+        'tags': [],
+        'libs': [],
+        'sources': [],
+        'kinds': [],
+        'licenses': [],
+        'languages': [],
+    }
+    for i in items:
+        for k, v in aggs.items():
+            print(k, v)
+            if v in i['_source']:
+                j = i['_source'][v]
+                if isinstance(j, list):
+                    a[k].extend(j)
+                elif isinstance(j, str):
+                    a[k].append(j)
+
+    for k, v in a.items():
+        # sort
+        a[k] = dict(sorted(dict(Counter(v)).items(),
+                           key=lambda item: item[1], reverse=True))
+        # restrict count
+        a[k] = dict(list(a[k].items())[:options['max_items_aggregations']])
+
+    return a
 
 
 def bundle_aggregations(a, b):
@@ -257,7 +305,10 @@ def bundle_aggregations(a, b):
 
     # sort aggregations
     for k, v in c.items():
+        # sort
         c[k] = dict(sorted(v.items(), key=lambda item: item[1], reverse=True))
+        # restrict count
+        c[k] = dict(list(c[k].items())[:options['max_items_aggregations']])
 
     return c
 
@@ -289,7 +340,7 @@ def keySearch(es, must, must_not={}, index=es_index, size=options['max_results']
     s = parse_es_search_score("_score*0.01", boost=boost, scale=placeholder)
 
     # get aggregations
-    a = get_es_aggregations()
+    # a = get_es_aggregations()
 
     # ES body
     b = {
@@ -305,8 +356,9 @@ def keySearch(es, must, must_not={}, index=es_index, size=options['max_results']
                     }
                 }
             }
-        },
-        "aggs": a
+        }
+        # ,
+        # "aggs": a
     }
 
     # print query sructure
@@ -344,12 +396,17 @@ def keySearch(es, must, must_not={}, index=es_index, size=options['max_results']
         res = es.search(index=index, body=c)
 
         # parse aggregations
-        if 'aggregations' in res:
-            res['aggregations'] = parse_aggregations(res['aggregations'])
-            # print aggregations
-            if debug['print_keysearch_aggregation']:
-                print('keysearch aggregation:', json.dumps(
-                    res['aggregations'], indent=2))
+        # if 'aggregations' in res:
+        #     res['aggregations'] = parse_es_aggregations(res['aggregations'])
+        #     # print aggregations
+        #     if debug['print_keysearch_aggregation']:
+        #         print('keysearch aggregation:', json.dumps(
+        #             res['aggregations'], indent=2))
+
+    res['aggregations'] = parse_aggregations(res['hits']['hits'])
+    if debug['print_keysearch_aggregation']:
+        print('keysearch aggregation:', json.dumps(
+            res['aggregations'], indent=2))
 
     return res
 
@@ -402,7 +459,7 @@ def semSearch(es, query, tags, embedding, must, must_not={}, index=es_index, siz
     s = parse_es_search_score(s_func, boost=boost)
 
     # get aggregations
-    a = get_es_aggregations()
+    # a = get_es_aggregations()
 
     if len(b) == 0:
         b = {
@@ -417,8 +474,9 @@ def semSearch(es, query, tags, embedding, must, must_not={}, index=es_index, siz
                         "params": {"query_vector": query_vector}
                     }
                 }
-            },
-            "aggs": a
+            }
+            # ,
+            # "aggs": a
         }
     else:
         b = {
@@ -433,8 +491,9 @@ def semSearch(es, query, tags, embedding, must, must_not={}, index=es_index, siz
                         "params": {"query_vector": query_vector}
                     }
                 }
-            },
-            "aggs": a
+            }
+            # ,
+            # "aggs": a
         }
 
     # print query
@@ -445,12 +504,18 @@ def semSearch(es, query, tags, embedding, must, must_not={}, index=es_index, siz
     res = es.search(index=index, body=b)
 
     # parse aggregations
-    if 'aggregations' in res:
-        res['aggregations'] = parse_aggregations(res['aggregations'])
-        # print aggregations
-        if debug['print_semantic_aggregation']:
-            print('semantic aggregation:', json.dumps(
-                res['aggregations'], indent=2))
+    # if 'aggregations' in res:
+    #     res['aggregations'] = parse_es_aggregations(res['aggregations'])
+    #     # print aggregations
+    #     if debug['print_semantic_aggregation']:
+    #         print('semantic aggregation:', json.dumps(
+    #             res['aggregations'], indent=2))
+
+    res['aggregations'] = parse_aggregations(res['hits']['hits'])
+    # print aggregations
+    if debug['print_semantic_aggregation']:
+        print('semantic aggregation:', json.dumps(
+            res['aggregations'], indent=2))
 
     return res
 
@@ -556,7 +621,7 @@ def favicon():
 # index / search route
 @ app.route('/', methods=['GET', 'POST'], endpoint='gui')
 @ app.route('/api', methods=['GET'], endpoint='api')
-def search(query='', options=options):
+def search(query='', options=options, guide=guide):
     '''
     index / search route
     gui & api access
@@ -613,9 +678,10 @@ def search(query='', options=options):
         's': '',
     }
     html_embeddings = {
-        'use': 'checked',
-        'use_large': '',
+        'use4': '',
+        'use5': '',
     }
+    html_embeddings[options['default_embedding']] = 'checked'
     html_boosting = {
         'false': 'checked',
         'true': '',
@@ -626,7 +692,6 @@ def search(query='', options=options):
     q_field = 'fulltext'
     q_engines = ['k', 's']
     q_secondary = q_field[0]
-    model = 'use'
     aggregations = aggregations_key = aggregations_sem = {}
     aggs_checked = ['categories', 'tags', 'libs']
 
@@ -794,17 +859,17 @@ def search(query='', options=options):
         # assing embedding
         vec = options['default_embedding']
         # load USE4 model
-        if model == 'use':
+        if model == 'use4':
             embedding = embed_use
             vec = 'use4'
-            html_embeddings['use'] = 'checked'
-            html_embeddings['use_large'] = ''
+            html_embeddings['use4'] = 'checked'
+            html_embeddings['use5'] = ''
         # load USE5_large model
-        elif model == 'use_large':
+        elif model == 'use5':
             embedding = embed_use_large
             vec = 'use5'
-            html_embeddings['use'] = ''
-            html_embeddings['use_large'] = 'checked'
+            html_embeddings['use4'] = ''
+            html_embeddings['use5'] = 'checked'
         # exit if model is not known
         else:
             print('model not defined')
@@ -856,10 +921,10 @@ def search(query='', options=options):
         # perform semantic search
         if 's' in q_engines:
             # set tags to query
-            tags = [q_field+'_vector_'+vec]
+            tags = [q_field+'_vector_'+model]
             if q_field == 'fulltext':
-                tags = ['title_vector_'+vec, 'summarization_vector_' +
-                        vec, 'fulltext_vector_'+vec]
+                tags = ['title_vector_'+model, 'summarization_vector_' +
+                        vec, 'fulltext_vector_'+model]
 
             # perform search
             res = semSearch(
@@ -919,6 +984,12 @@ def search(query='', options=options):
     if debug['print_aggregations']:
         print('aggregations:', json.dumps(b, indent=2))
 
+    # refresh guide
+    if len(aggregations) > 0:
+        guide = {}
+        for k, v in aggregations.items():
+            guide[k] = v.keys()
+
     # return view to gui endpoint
     if request.endpoint == 'gui':
         match['query'] = q
@@ -932,11 +1003,11 @@ def search(query='', options=options):
             boosting=html_boosting,
             embeddings=html_embeddings,
             items=items,
-            # show_filter=show_filter,
             runtime=dur,
-            js=html_guide,
+            guides=guide,
             aggregations=aggregations,
-            aggs_checked=aggs_checked
+            aggs_checked=aggs_checked,
+            debug=debug_view,
         )
 
     # return json to api endpoint

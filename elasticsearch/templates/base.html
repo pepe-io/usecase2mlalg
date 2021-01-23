@@ -274,8 +274,10 @@
       // });
 
       function toggle(id) {
-        console.log("toggle", id);
-        $(id).slideToggle();
+        // console.log("toggle", id);
+        $("#" + id).slideToggle();
+        $("#" + id + "_plus").toggle();
+        $("#" + id + "_minus").toggle();
       }
     </script>
     <!-- Graphs -->
