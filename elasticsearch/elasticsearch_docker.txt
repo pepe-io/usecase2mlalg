@@ -1,0 +1,32 @@
+### 1. Install Docker ###
+Install Docker
+
+### 2. Install Elasticsearch Container ###
+
+# Install Elasticsearch Docker Container
+docker pull docker.elastic.co/elasticsearch/elasticsearch:7.10.1
+
+# list docker containers
+docker image ls
+
+# start elasticsearch-container
+docker run -m 6G -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" --name es docker.elastic.co/elasticsearch/elasticsearch:7.10.1
+
+# list running containers
+docker ps
+
+# diplay resource usage statistics
+docker stats
+
+# switch to cmd of container
+docker exec -it es bash
+
+### 3. Install Relative Score Plugin ###
+# https://gitlab.com/pnmougel/documentscorerplugin
+
+sudo bin/elasticsearch-plugin install https://gitlab.com/pnmougel/documentscorerplugin/raw/master/releases/docscorer-7.10.1_1.0.0.zip
+
+# Restart Elasticsearch Instance
+
+# see state
+# http://localhost:9200/_cat/plugins

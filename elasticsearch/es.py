@@ -32,14 +32,10 @@ else:
     dataset = None
 
 # es instance name
-index = 'usecase2mlalg'
-index = 'usecase2mlalg_lemma'
-index = 'usecase2mlalg_descriptive'
 index = 'usecase2ml'
-index = 'usecase2ml_aggs'
 
 # set treshold for category and subcategory score
-treshold = 0.5
+treshold = 0.25
 
 # print some values
 print('index:', index)
@@ -68,6 +64,11 @@ mapping = {
         "type": "text",
         "analyzer": "english"
     },
+    "title_boolean": {
+        "type": "text",
+        "analyzer": "english",
+        "similarity": "boolean"
+    },
     "title_vector_use4": {
         "type": "dense_vector",
         "dims": 512
@@ -80,10 +81,15 @@ mapping = {
         "type": "text",
         "analyzer": "english"
     },
-    "summarization_lemmatized": {
+    "summarization_boolean": {
         "type": "text",
-        "analyzer": "english"
+        "analyzer": "english",
+        "similarity": "boolean"
     },
+    # "summarization_lemmatized": {
+    #     "type": "text",
+    #     "analyzer": "english"
+    # },
     "summarization_vector_use4": {
         "type": "dense_vector",
         "dims": 512
@@ -95,6 +101,11 @@ mapping = {
     "fulltext": {
         "type": "text",
         "analyzer": "english"
+    },
+    "fulltext_boolean": {
+        "type": "text",
+        "analyzer": "english",
+        "similarity": "boolean"
     },
     "fulltext_vector_use4": {
         "type": "dense_vector",
@@ -316,9 +327,10 @@ if mode == '-index' or mode == '-update':
                 record = {}
 
                 # map all fields from mapping
-                for key in mapping.keys():
-                    if key in raw and raw[key] != '':
-                        record[key] = raw[key]
+                # for key in mapping.keys():
+                #     if key in raw and raw[key] != '':
+                #         record[key] = raw[key]
+                record = {k: v for k, v in raw.items() if k in mapping.keys()}
 
                 # if 'description_lemmatized' in raw:
                 #     record['description'] = raw['description_lemmatized']
@@ -359,9 +371,10 @@ if mode == '-index' or mode == '-update':
                     # fill summary
                     if not 'summarization' in record:
                         record['summarization'] = raw['description'] if 'description' in raw else ''
+                        record['summarization'] = raw['sum_nltk'] if 'sum_nltk' in raw and raw['sum_nltk'] != '' else record['summarization']
 
-                    if not 'summarization_lemmatized' in record:
-                        record['summarization_lemmatized'] = raw['description_lemmatized'] if 'description_lemmatized' in raw else ''
+                    # if not 'summarization_lemmatized' in record:
+                    #     record['summarization_lemmatized'] = raw['description_lemmatized'] if 'description_lemmatized' in raw else ''
 
                     # print(record)
                     # sys.exit()
@@ -434,6 +447,11 @@ if mode == '-index' or mode == '-update':
                     # store fulltext
                     record['fulltext'] = ft
 
+                    # duplicates fields for boolean search
+                    record['title_boolean'] = record['title']
+                    record['summarization_boolean'] = record['summarization']
+                    record['fulltext_boolean'] = record['fulltext']
+
                     # convert scores to float
                     for r in record:
                         if 'score' in r and r != '':
@@ -443,7 +461,7 @@ if mode == '-index' or mode == '-update':
                     if mode == '-index':
                         # create vectors
                         vectorize = [
-                            'title', 'summarization_lemmatized', 'fulltext']
+                            'title', 'summarization', 'fulltext']
                         for field in vectorize:
                             # print(field)
                             for embed in embeddings.keys():

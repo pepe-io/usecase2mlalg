@@ -226,18 +226,34 @@
               <li class="nav-item">
                 <div class="nav-link">
                   <div class="btn-group btn-group-toggle btn-group-xs btn-group-block" data-toggle="buttons">
-                    <label class="btn btn-outline-secondary">
+                    <!-- <label class="btn btn-outline-secondary">
                       <input type="radio" name="engine" id="ks" class="toggle" value="k+s"
                       autocomplete="off" {{ query_engines['ks'] }} /> Both
+                    </label> -->
+
+                    <label class="btn btn-outline-secondary">
+                      <input type="checkbox" name="engine_k" id="k" class="toggle" value="k"
+                      autocomplete="off" {% if 'k' in query_engines %} checked {% endif %} /> Keyword
                     </label>
                     <label class="btn btn-outline-secondary">
-                      <input type="radio" name="engine" id="k" class="toggle" value="k"
-                      autocomplete="off" {{ query_engines['k'] }} /> Keyword
+                      <input type="checkbox" name="engine_b" id="b" class="toggle" value="b"
+                      autocomplete="off" {% if 'b' in query_engines %} checked {% endif %} /> Boolean
                     </label>
                     <label class="btn btn-outline-secondary">
-                      <input type="radio" name="engine" id="s" class="toggle" value="s"
-                      autocomplete="off" {{ query_engines['s'] }} /> Semantic
+                      <input type="checkbox" name="engine_s" id="s" class="toggle" value="s"
+                      autocomplete="off" {% if 's' in query_engines %} checked {% endif %} /> Semantic
                     </label>
+                    
+                    <!-- <a id="k" class="btn btn-outline-secondary {% if 'k' in query_engines %} active {% endif %}" onClick="engine_toggle('k');"
+                    href="javascript:;" {% if 'k' in query_engines %} aria-pressed="true" {% endif %}>Keyword</a>
+
+                    <a id="b" class="btn btn-outline-secondary {% if 'b' in query_engines %} active {% endif %}" onClick="engine_toggle('b');"
+                    href="javascript:;" {% if 'b' in query_engines %} aria-pressed="true" {% endif %}>Boolean</a>
+                    
+                    <a id="s" class="btn btn-outline-secondary {% if 's' in query_engines %} active {% endif %}" onClick="engine_toggle('s');"
+                    href="javascript:;" {% if 's' in query_engines %} aria-pressed="true" {% endif %}>Semantic</a>
+
+                    <input id="engines" name="engine" type="hidden" value="{{ ','.join(query_engines) }}"> -->
                   </div>
                 </div>
               </li>
@@ -417,6 +433,9 @@
                       href="javascript:;"
                       >{{ item.title }}</a
                     >
+                    {% if item.missing|length > 0%} 
+                    <span class="text-danger">[missing {{ ' '.join(item.missing) }}]</span>
+                    {% endif %}
 
                   <div id="{{ item.index }}" class="hidden">
                     <div class="row mt-2 mb-2">

@@ -13,6 +13,7 @@ import tensorflow as tf
 import tensorflow_hub as hub
 import nltk
 import re
+import pandas as pd
 import unicodedata
 from nltk.corpus import stopwords
 
@@ -23,17 +24,18 @@ start = time.time()
 app = Flask(__name__)
 
 # es instanc name
-es_index = 'usecase2mlalg'
-es_index = 'usecase2mlalg_lemma'
-es_index = 'usecase2mlalg_descriptive'
 es_index = 'usecase2ml'
-es_index = 'usecase2ml_aggs'
 
 # options & debug
 options = {
     'use4': True,
     'use5': True,
     'default_embedding': 'use5',
+    'search_engines': {
+        'keyword_default': True,
+        'keyword_boolean': True,
+        'semantic': True,
+    },
     'max_results': 20,
     'score_treshold': 0.1,
     'bundle_items': True,
@@ -50,9 +52,10 @@ debug = {
     'print_semantic_query': False,
     'print_semantic_result': False,
     'print_semantic_aggregation': False,
-    'print_request_args': False,
+    'print_request_args': True,
     'print_first_record': False,
     'print_aggregations': False,
+    'print_filter_response': False,
 }
 
 debug_view = {
@@ -86,6 +89,7 @@ if options['use4']:
 if options['use5']:
     print('load USE5_large embedding')
     use5_start = time.time()
+    embed_use_large = None
     embed_use_large = hub.load("./.USE5_large/")
     use5_end = time.time()
     print('loaded ('+str(round(use5_end-use5_start, 3))+'sec)')
@@ -359,7 +363,7 @@ def bundle_aggregations(a, b):
     return c
 
 
-def keySearch(es, must, must_not={}, index=es_index, size=options['max_results'], boost={}):
+def keySearch(es, must, must_not={}, index=es_index, size=options['max_results'], boost={}, scale=False):
     '''
     Search by Keyword, td-idf
 
@@ -423,7 +427,7 @@ def keySearch(es, must, must_not={}, index=es_index, size=options['max_results']
     # we have to do the search a second time
     # to apply scaling before boosting
     # only do this, if we have results
-    if len(res['hits']['hits']) > 0:
+    if len(res['hits']['hits']) > 0 and scale == True:
         scale = res['hits']['hits'][0]['_score']
 
         # print result (zeroize vectors)
@@ -438,7 +442,7 @@ def keySearch(es, must, must_not={}, index=es_index, size=options['max_results']
         c = c.replace(placeholder, str(scale))
         c = json.loads(c)
 
-        # execute query
+        # execute query (apply rescaling)
         res = es.search(index=index, body=c)
 
         # parse aggregations
@@ -549,14 +553,6 @@ def semSearch(es, query, tags, embedding, must, must_not={}, index=es_index, siz
     # execute query
     res = es.search(index=index, body=b)
 
-    # parse aggregations
-    # if 'aggregations' in res:
-    #     res['aggregations'] = parse_es_aggregations(res['aggregations'])
-    #     # print aggregations
-    #     if debug['print_semantic_aggregation']:
-    #         print('semantic aggregation:', json.dumps(
-    #             res['aggregations'], indent=2))
-
     res['aggregations'] = parse_aggregations(res['hits']['hits'])
     # print aggregations
     if debug['print_semantic_aggregation']:
@@ -566,7 +562,7 @@ def semSearch(es, query, tags, embedding, must, must_not={}, index=es_index, siz
     return res
 
 
-def format_result(res, extra={}, res_filter=[], treshold=None):
+def format_result(res, query='', field='', scale=1, extra={}, res_filter=[], treshold=None, mode='gui'):
     '''
     parse formatting for response
     '''
@@ -574,39 +570,37 @@ def format_result(res, extra={}, res_filter=[], treshold=None):
 
     # rename some elasticsearch variables
     ret['id'] = res['_id']
-    ret['search_score'] = round(res['_score'], 3)
+    ret['search_score'] = res['_score']
     ret.update(res['_source'])
 
     # provide a title if missing
-    if ret['title'] == '':
-        ret['title'] = 'None'
+    ret['title'] = 'None' if ret['title'] == '' else ret['title']
 
     # delete vectors from response
-    # pop = ['title_vector_use4', 'title_vector_use5', 'summarization_vector_use4',
-    #        'summarization_vector_use5', 'fulltext_vector_use4', 'fulltext_vector_use5']
-    # for p in pop:
-    #     if p in ret:
-    #         ret.pop(p)
     ret = {k: v if not 'vector' in k else None for k, v in ret.items()}
 
     # bundle scores
     scores = ['learn_score', 'explore_score',
               'compete_score', 'ml_score', 'engagement_score']
-    ret['scores'] = {}
-    for s in scores:
-        if s in ret and ret[s] > 0:
-            ret['scores'].update({s: ret[s]})
-    ret['scores'] = ' | '.join(['{k}: <b>{v}</b>'.format(k=k.replace('_', ' '), v=v)
-                                for k, v in ret['scores'].items()])
+    ret['scores'] = {x: ret[x] for x in scores if x in ret and ret[x] > 0}
+    # format score for gui
+    if mode == 'gui':
+        ret['scores'] = ' | '.join(['{k}: <b>{v}</b>'.format(k=k.replace('_', ' '), v=v)
+                                    for k, v in ret['scores'].items()])
 
     # get type
-    ret['type'] = []
-    if ret['learn_score'] > 0:
-        ret['type'].append('Learn')
-    if ret['explore_score'] > 0:
-        ret['type'].append('Explore')
-    if ret['compete_score'] > 0:
-        ret['type'].append('Compete')
+    types = ['learn_score', 'explore_score', 'compete_score']
+    ret['type'] = [x.replace('_score', '').title()
+                   for x in types if ret[x] > 0]
+
+    # detect missing query items & recalculate
+    ret['missing'] = []
+    q_terms = query.split(' ')
+    for q in q_terms:
+        if ret[field].lower().find(q.lower()) == -1:
+            ret['missing'].append(q)
+    ret['search_score'] = round((len(q_terms) - len(ret['missing'])
+                                 ) / len(q_terms) * ret['search_score'] / scale, 3)
 
     # add extras
     ret.update(extra)
@@ -652,7 +646,8 @@ def filter_response(items, res_filter):
     if len(res_filter) > 0:
         for item in items:
             ret.append({key: item[key] for key in res_filter if key in item})
-    print(ret)
+    if debug['print_filter_response']:
+        print(ret)
     return ret
 
 
@@ -702,6 +697,7 @@ def search(query='', options=options, guide=guide):
         # 'compete_score': 1,
         # 'boost_engagement_score': 1,
     }
+    boost_engagement_score_factor = 3
 
     # filter response
     res_filter = []
@@ -713,11 +709,12 @@ def search(query='', options=options, guide=guide):
         'explore': '',
         'compete': '',
     }
-    html_q_engines = {
-        'k': '',
-        's': '',
-        'ks': 'checked',
-    }
+    # html_q_engines = {
+    #     'k': '',
+    #     's': '',
+    #     'ks': 'checked',
+    # }
+    # html_q_engines = ['k', 'b', 's']
     html_q_secondary = {
         'f': 'checked',
         't': '',
@@ -728,26 +725,46 @@ def search(query='', options=options, guide=guide):
         'use5': '',
     }
     html_embeddings[options['default_embedding']] = 'checked'
-    html_boosting = {
-        'false': 'checked',
-        'true': '',
-    }
+    # html_boosting = {
+    #     'false': 'checked',
+    #     'true': '',
+    # }
 
     # set default values
     q = ''
     q_field = 'fulltext'
-    q_engines = ['k', 's']
+    q_engines = ['k', 'b', 's']
     q_secondary = q_field[0]
-    aggregations = aggregations_key = aggregations_sem = {}
+    aggregations = aggregations_key = aggregations_bool = aggregations_sem = {}
     aggs_checked = ['categories', 'tags', 'libs']
 
     ### POST / GUI ###
-    if request.method == 'POST':
+    if request.endpoint == 'gui':
         r = request.form
 
+        # get query engines
+        if 'engine_k' in r or 'engine_b' in r or 'engine_s' in r:
+            q_engines = []
+        if 'engine_k' in r:
+            q_engines.append('k')
+        if 'engine_b' in r:
+            q_engines.append('b')
+        if 'engine_s' in r:
+            q_engines.append('s')
+
     ### GET / API ###
-    if request.method == 'GET':
-        r = request.args
+    if request.endpoint == 'api':
+        r = dict(request.args)
+        # set some default values if missing
+        if not 'mode' in r:
+            r['mode'] = 'all'
+        if not 'model' in r:
+            r['model'] = 'use5'
+        if not 'engine' in r:
+            r['engine'] = 'k b s'
+
+        # get query engines
+        q_engines = r.get('engine').split(' ')
 
     # print request args
     if debug['print_request_args']:
@@ -756,22 +773,22 @@ def search(query='', options=options, guide=guide):
     # PARSE REQUEST
     if len(r) > 0:
         # get search query
-        q = r.get('search').strip()
+        q = r.get('search').strip() if r.get('search') else ''
 
         # get query engines
-        q_engines = r.get('engine').split('+')
-        html_q_engines['k'] = ''
-        html_q_engines['s'] = ''
-        html_q_engines['ks'] = ''
+        # q_engines = r.get('engine').split(',')
+        # html_q_engines['k'] = ''
+        # html_q_engines['s'] = ''
+        # html_q_engines['ks'] = ''
 
-        if q_engines == ['k']:
-            html_q_engines['k'] = 'checked'
+        # if q_engines == ['k']:
+        #     html_q_engines['k'] = 'checked'
 
-        if q_engines == ['s']:
-            html_q_engines['s'] = 'checked'
+        # if q_engines == ['s']:
+        #     html_q_engines['s'] = 'checked'
 
-        if q_engines == ['k', 's']:
-            html_q_engines['ks'] = 'checked'
+        # if q_engines == ['k', 's']:
+        #     html_q_engines['ks'] = 'checked'
 
         # field (title / summarization / fulltext)
         if r.get('field'):
@@ -837,17 +854,10 @@ def search(query='', options=options, guide=guide):
             model = r.get('model')
 
         # add boosting
-        # if r.get('boosting'):
-        #     # gui
-        #     if r.get('boosting') == 'true':
-        #         boosting = 10
-        #         html_boosting = {
-        #             'false': '',
-        #             'true': 'checked',
-        #         }
-        #     # api
-        #     elif isinstance(r.get('boosting'), int):
-        #         boosting = r.get('boosting')
+        if r.get('boosting'):
+            # api
+            if isinstance(r.get('boosting'), int):
+                boost_engagement_score_factor = r.get('boosting')
 
         # add mode
         if r['mode'] == 'learn':
@@ -855,7 +865,7 @@ def search(query='', options=options, guide=guide):
                 'learn_score': 1,
                 'explore_score': 0,
                 'compete_score': 0,
-                'boost_engagement_score': 3,
+                'boost_engagement_score': boost_engagement_score_factor,
             }
             html_mode = {
                 'all': '',
@@ -921,58 +931,90 @@ def search(query='', options=options, guide=guide):
             print('model not defined')
             sys.exit()
 
+    # print some statistics
+    print('###')
+    print('search:', q)
+    print('engines:', q_engines)
+    print('field:', q_field)
+    # print('model:', model)
+    print('instance:', es_index)
+    print('boosting:', boosting)
+    print('---')
+
     ### PERFORM QUERY ##
     if q != '' and q != ['']:
         i = 0
-        # print some statistics
-        print('###')
-        print('search:', q)
-        print('engines:', q_engines)
-        print('field:', q_field)
-        print('model:', model,)
-        print('instance:', es_index)
-        print('boosting:', boosting)
-        print('---')
 
         # perform keyword based search
-        if 'k' in q_engines:
+        if 'k' in q_engines or 'b' in q_engines:
             # set tags to query
             tags = {q_field: q}
-            if q_field == 'fulltext':
-                tags = {'title': q,
-                        'summarization_lemmatized': q, 'fulltext': q}
-            elif q_field == 'summarization':
-                tags = {'summarization_lemmatized': q}
+            # if q_field == 'fulltext':
+            #     tags = {'title': q,
+            #             'summarization': q, 'fulltext': q}
+            # elif q_field == 'summarization':
+            #     tags = {'summarization': q}
 
             # append match filters
             tags.update(match)
 
-            # perform search
-            res = keySearch(
-                es, tags, size=size, must_not=match_not, boost=boosting)
+            # perform search (default scoring function: BM25 or TD*IDF)
+            if 'k' in q_engines and options['search_engines']['keyword_default']:
+                res = keySearch(
+                    es, tags, size=size, must_not=match_not, boost=boosting, scale=True)
 
-            # store aggregations
-            aggregations_key = res['aggregations']
+                # store aggregations
+                aggregations_key = res['aggregations']
 
-            # parse results
-            for hit in res['hits']['hits']:
-                # add some extra fields to the record
-                extra = {'index': 'index'+str(i), 'search': 'k' +
-                         q_field[0], 'instance': es_index, 'embedding': model}
-                # format record
-                item = format_result(hit, extra=extra, treshold=treshold)
-                # append record
-                if item != None:
-                    items.append(item)
-                    i += 1
+                # get scale
+                if len(res['hits']['hits']) > 0:
+                    scale = res['hits']['hits'][0]['_score']
+                # parse results
+                for hit in res['hits']['hits']:
+                    # add some extra fields to the record
+                    extra = {'index': str(i), 'search': 'k' +
+                             q_field[0], 'embedding': model}
+                    # format record
+                    item = format_result(
+                        hit, query=q, field=q_field, scale=scale, extra=extra, treshold=treshold, mode=request.endpoint)
+                    # append record
+                    if item != None:
+                        items.append(item)
+                        i += 1
+
+            # perform search (scoring function: boolean)
+            if 'b' in q_engines and options['search_engines']['keyword_boolean']:
+                tags = {k+'_boolean': v for k, v in tags.items()}
+                res = keySearch(
+                    es, tags, size=size, must_not=match_not, boost=boosting, scale=True)
+
+                # store aggregations
+                aggregations_bool = res['aggregations']
+
+                # get scale
+                if len(res['hits']['hits']) > 0:
+                    scale = res['hits']['hits'][0]['_score']
+                # parse results
+                for hit in res['hits']['hits']:
+                    # add some extra fields to the record
+                    extra = {'index': str(i), 'search': 'b' +
+                             q_field[0], 'embedding': model}
+                    # format record
+                    item = format_result(
+                        hit, query=q, field=q_field, scale=scale, extra=extra, treshold=treshold, mode=request.endpoint)
+                    # append record
+                    if item != None:
+                        items.append(item)
+                        i += 1
 
         # perform semantic search
-        if 's' in q_engines:
+        if 's' in q_engines and options['search_engines']['semantic']:
             # set tags to query
             tags = [q_field+'_vector_'+model]
             if q_field == 'fulltext':
-                tags = ['title_vector_'+model, 'summarization_vector_' +
-                        vec, 'fulltext_vector_'+model]
+                # tags = ['title_vector_'+model, 'summarization_vector_' +
+                #         vec, 'fulltext_vector_'+model]
+                tags = ['fulltext_vector_'+model]
 
             # perform search
             res = semSearch(
@@ -984,10 +1026,11 @@ def search(query='', options=options, guide=guide):
             # parse results
             for hit in res['hits']['hits']:
                 # add some extra fields to the record
-                extra = {
-                    'index': 'index'+str(i), 'search': 's'+q_field[0], 'instance': es_index, 'embedding': model}
+                extra = {'index': str(i), 'search': 's' +
+                         q_field[0], 'embedding': model}
                 # format record
-                item = format_result(hit, extra=extra, treshold=treshold)
+                item = format_result(
+                    hit, query=q, field=q_field, extra=extra, treshold=treshold, mode=request.endpoint)
                 # append record
                 if item != None:
                     items.append(item)
@@ -1022,11 +1065,24 @@ def search(query='', options=options, guide=guide):
     if q_engines == ['k']:
         aggregations = aggregations_key
 
+    if q_engines == ['b']:
+        aggregations = aggregations_bool
+
     if q_engines == ['s']:
         aggregations = aggregations_sem
 
+    if q_engines == ['k', 'b']:
+        aggregations = bundle_aggregations(aggregations_key, aggregations_bool)
+
     if q_engines == ['k', 's']:
         aggregations = bundle_aggregations(aggregations_key, aggregations_sem)
+
+    if q_engines == ['b', 's']:
+        aggregations = bundle_aggregations(aggregations_bool, aggregations_sem)
+
+    if q_engines == ['k', 'b', 's']:
+        aggregations = bundle_aggregations(aggregations_key, aggregations_bool)
+        aggregations = bundle_aggregations(aggregations, aggregations_sem)
 
     # print aggregations
     if debug['print_aggregations']:
@@ -1040,15 +1096,17 @@ def search(query='', options=options, guide=guide):
 
     # return view to gui endpoint
     if request.endpoint == 'gui':
+        # sort items
+        items = sorted(items, key=lambda k: k['search_score'], reverse=True)
+
         match['query'] = q
         return render_template(
             'index.html',
             match=match,
             match_not=match_not,
-            query_engines=html_q_engines,
+            query_engines=q_engines,
             query_secondary=html_q_secondary,
             query_mode=html_mode,
-            boosting=html_boosting,
             embeddings=html_embeddings,
             items=items,
             runtime=dur,
@@ -1060,7 +1118,31 @@ def search(query='', options=options, guide=guide):
 
     # return json to api endpoint
     if request.endpoint == 'api':
-        return Response(json.dumps(items), mimetype='application/json')
+        # sort items
+        sort_key = 'search_score'
+        sort_reverse = True
+        if 'sort' in r:
+            sort = r['sort'].split(' ')
+            # get field to be sorted
+            if len(items) > 0 and sort[0] in items[0]:
+                sort_key = sort[0]
+            # detect reverse sort order
+            if len(sort) > 1 and sort[1] == 'reverse':
+                sort_reverse = True
+            else:
+                sort_reverse = False
+        # perform sorting
+        items = sorted(items, key=lambda k: k[sort_key], reverse=sort_reverse)
+
+        # return csv
+        if 'format' in r and r['format'] == 'csv':
+            df = pd.DataFrame(items)
+            csv = df.to_csv(index=False, sep=';')
+            return Response(csv, mimetype='text/csv')
+
+        # return json
+        else:
+            return Response(json.dumps(items), mimetype='application/json')
 
 
 # start app

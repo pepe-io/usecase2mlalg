@@ -175,7 +175,8 @@
       {% endfor %}
     </script>
     <script>
-      var charts_selected = {{ aggs_checked| tojson }};
+      var charts_selected = {{ aggs_checked|tojson }};
+      var engines_selected = {{ query_engines|tojson }};
     </script>
     {% block head %}{% endblock %}
   </head>
@@ -258,6 +259,22 @@
           "charts_selected"
         ).value = charts_selected.toString();
         console.log("selected", Object.values(charts_selected));
+      }
+
+      // toggle search engine
+      function engine_toggle(engine) {
+        // var engines = [...document.getElementById("engines").value];
+        console.log("engine_toggle", engine, engines_selected);
+        // remove item
+        if (engines_selected.includes(engine)) {
+          engines_selected = engines_selected.filter((item) => item !== engine);
+        }
+        // add item
+        else {
+          engines_selected.push(engine);
+        }
+        document.getElementById("engines").value = engines_selected;
+        console.log("engine_toggled", engines_selected);
       }
 
       // $(document).ready(function () {
