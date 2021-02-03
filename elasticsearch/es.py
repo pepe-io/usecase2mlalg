@@ -349,6 +349,8 @@ if mode == '-index' or mode == '-update':
                 if not 'title' in record or record['title'] == '':
                     print('skipped - missing title')
                     skip = True
+                else:
+                    record['title'] = record['title'].strip()
 
                 # skip if language_code is not 'en'
                 languages = ['en', 'af']

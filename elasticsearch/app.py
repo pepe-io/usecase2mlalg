@@ -42,6 +42,7 @@ options = {
     'cutoff_items': False,
     'aggregations': True,
     'ngrams': True,
+    'scale_search_score': True,
     'max_items_aggregations': 10,
 }
 
@@ -89,7 +90,6 @@ if options['use4']:
 if options['use5']:
     print('load USE5_large embedding')
     use5_start = time.time()
-    embed_use_large = None
     embed_use_large = hub.load("./.USE5_large/")
     use5_end = time.time()
     print('loaded ('+str(round(use5_end-use5_start, 3))+'sec)')
@@ -321,7 +321,7 @@ def parse_aggregations(items):
     # n-grams
     if options['ngrams']:
         words = basic_clean(''.join(str(words)))
-        names = ['onegram', 'twogram', 'threegram']
+        names = ['unigram', 'bigram', 'trigram']
         for i in range(1, 4):
             n = nltk.ngrams(words, i)
             # sort
@@ -341,6 +341,10 @@ def bundle_aggregations(a, b):
     '''
     bundle aggregation from keysearch and semantic search
     '''
+
+    # if a empty return b
+    if len(a) == 0:
+        return b
 
     c = dict(a)
     # combine aggregation
@@ -444,14 +448,6 @@ def keySearch(es, must, must_not={}, index=es_index, size=options['max_results']
 
         # execute query (apply rescaling)
         res = es.search(index=index, body=c)
-
-        # parse aggregations
-        # if 'aggregations' in res:
-        #     res['aggregations'] = parse_es_aggregations(res['aggregations'])
-        #     # print aggregations
-        #     if debug['print_keysearch_aggregation']:
-        #         print('keysearch aggregation:', json.dumps(
-        #             res['aggregations'], indent=2))
 
     res['aggregations'] = parse_aggregations(res['hits']['hits'])
     if debug['print_keysearch_aggregation']:
@@ -709,12 +705,6 @@ def search(query='', options=options, guide=guide):
         'explore': '',
         'compete': '',
     }
-    # html_q_engines = {
-    #     'k': '',
-    #     's': '',
-    #     'ks': 'checked',
-    # }
-    # html_q_engines = ['k', 'b', 's']
     html_q_secondary = {
         'f': 'checked',
         't': '',
@@ -725,17 +715,14 @@ def search(query='', options=options, guide=guide):
         'use5': '',
     }
     html_embeddings[options['default_embedding']] = 'checked'
-    # html_boosting = {
-    #     'false': 'checked',
-    #     'true': '',
-    # }
 
     # set default values
     q = ''
     q_field = 'fulltext'
     q_engines = ['k', 'b', 's']
     q_secondary = q_field[0]
-    aggregations = aggregations_key = aggregations_bool = aggregations_sem = {}
+    aggregations = {}
+    aggregations_raw = []
     aggs_checked = ['categories', 'tags', 'libs']
 
     ### POST / GUI ###
@@ -774,21 +761,6 @@ def search(query='', options=options, guide=guide):
     if len(r) > 0:
         # get search query
         q = r.get('search').strip() if r.get('search') else ''
-
-        # get query engines
-        # q_engines = r.get('engine').split(',')
-        # html_q_engines['k'] = ''
-        # html_q_engines['s'] = ''
-        # html_q_engines['ks'] = ''
-
-        # if q_engines == ['k']:
-        #     html_q_engines['k'] = 'checked'
-
-        # if q_engines == ['s']:
-        #     html_q_engines['s'] = 'checked'
-
-        # if q_engines == ['k', 's']:
-        #     html_q_engines['ks'] = 'checked'
 
         # field (title / summarization / fulltext)
         if r.get('field'):
@@ -949,11 +921,6 @@ def search(query='', options=options, guide=guide):
         if 'k' in q_engines or 'b' in q_engines:
             # set tags to query
             tags = {q_field: q}
-            # if q_field == 'fulltext':
-            #     tags = {'title': q,
-            #             'summarization': q, 'fulltext': q}
-            # elif q_field == 'summarization':
-            #     tags = {'summarization': q}
 
             # append match filters
             tags.update(match)
@@ -964,7 +931,7 @@ def search(query='', options=options, guide=guide):
                     es, tags, size=size, must_not=match_not, boost=boosting, scale=True)
 
                 # store aggregations
-                aggregations_key = res['aggregations']
+                aggregations_raw.append(res['aggregations'])
 
                 # get scale
                 if len(res['hits']['hits']) > 0:
@@ -989,7 +956,7 @@ def search(query='', options=options, guide=guide):
                     es, tags, size=size, must_not=match_not, boost=boosting, scale=True)
 
                 # store aggregations
-                aggregations_bool = res['aggregations']
+                aggregations_raw.append(res['aggregations'])
 
                 # get scale
                 if len(res['hits']['hits']) > 0:
@@ -1011,17 +978,13 @@ def search(query='', options=options, guide=guide):
         if 's' in q_engines and options['search_engines']['semantic']:
             # set tags to query
             tags = [q_field+'_vector_'+model]
-            if q_field == 'fulltext':
-                # tags = ['title_vector_'+model, 'summarization_vector_' +
-                #         vec, 'fulltext_vector_'+model]
-                tags = ['fulltext_vector_'+model]
 
             # perform search
             res = semSearch(
                 es, q, tags, embedding, match, size=size, must_not=match_not, boost=boosting)
 
             # store aggregations
-            aggregations_sem = res['aggregations']
+            aggregations_raw.append(res['aggregations'])
 
             # parse results
             for hit in res['hits']['hits']:
@@ -1062,27 +1025,8 @@ def search(query='', options=options, guide=guide):
 
     # bundle aggregations
     aggregations = {}
-    if q_engines == ['k']:
-        aggregations = aggregations_key
-
-    if q_engines == ['b']:
-        aggregations = aggregations_bool
-
-    if q_engines == ['s']:
-        aggregations = aggregations_sem
-
-    if q_engines == ['k', 'b']:
-        aggregations = bundle_aggregations(aggregations_key, aggregations_bool)
-
-    if q_engines == ['k', 's']:
-        aggregations = bundle_aggregations(aggregations_key, aggregations_sem)
-
-    if q_engines == ['b', 's']:
-        aggregations = bundle_aggregations(aggregations_bool, aggregations_sem)
-
-    if q_engines == ['k', 'b', 's']:
-        aggregations = bundle_aggregations(aggregations_key, aggregations_bool)
-        aggregations = bundle_aggregations(aggregations, aggregations_sem)
+    for a in aggregations_raw:
+        aggregations = bundle_aggregations(aggregations, a)
 
     # print aggregations
     if debug['print_aggregations']:
@@ -1093,6 +1037,13 @@ def search(query='', options=options, guide=guide):
         guide = {}
         for k, v in aggregations.items():
             guide[k] = v.keys()
+
+    # scale search scores
+    scale = len(q_engines)
+    if options['scale_search_score'] and scale > 1:
+        for i in items:
+            i.update((k, round(v/scale, 3))
+                     for k, v in i.items() if k == 'search_score')
 
     # return view to gui endpoint
     if request.endpoint == 'gui':

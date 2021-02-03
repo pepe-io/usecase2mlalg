@@ -58,6 +58,42 @@
         width: 200px;
         height: 100px;
       }
+      /**
+      * Smooth scrolling on the whole document
+      */
+      html {
+        scroll-behavior: smooth;
+      }
+      a.anchor {
+        display: block;
+        position: relative;
+        top: -50px;
+        visibility: hidden;
+      }
+      .link-unstyled {
+        &,
+        &:visited,
+        &:hover,
+        &:active,
+        &:focus,
+        &:active:hover {
+          font-style: inherit;
+          color: inherit;
+          background-color: transparent;
+          font-size: inherit;
+          text-decoration: none;
+          font-variant: inherit;
+          font-weight: inherit;
+          line-height: inherit;
+          font-family: inherit;
+          border-radius: inherit;
+          border: inherit;
+          outline: inherit;
+          box-shadow: inherit;
+          padding: inherit;
+          vertical-align: inherit;
+        }
+      }
 
       .select-wrapper {
         margin: auto;

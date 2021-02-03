@@ -221,7 +221,7 @@
               </span>
             </a>
           </h6>
-          <div id="nav_options" class="hidden">
+          <div id="nav_options" class="hiddens">
             <ul class="nav flex-column mb-2">
               <li class="nav-item">
                 <div class="nav-link">
@@ -313,71 +313,23 @@
         </div>
         {% else %}
         {% if aggregations|length > 0 %}
-        <div
-          style="
-            position: absolute;
-            inset: 0px;
-            overflow: hidden;
-            pointer-events: none;
-            visibility: hidden;
-            z-index: -1;
-          "
-          class="chartjs-size-monitor"
-        >
-          <div
-            class="chartjs-size-monitor-expand"
-            style="
-              position: absolute;
-              left: 0;
-              top: 0;
-              right: 0;
-              bottom: 0;
-              overflow: hidden;
-              pointer-events: none;
-              visibility: hidden;
-              z-index: -1;
-            "
-          >
-            <div
-              style="
-                position: absolute;
-                width: 1000000px;
-                height: 1000000px;
-                left: 0;
-                top: 0;
-              "
-            ></div>
-          </div>
-          <div
-            class="chartjs-size-monitor-shrink"
-            style="
-              position: absolute;
-              left: 0;
-              top: 0;
-              right: 0;
-              bottom: 0;
-              overflow: hidden;
-              pointer-events: none;
-              visibility: hidden;
-              z-index: -1;
-            "
-          >
-            <div
-              style="
-                position: absolute;
-                width: 200%;
-                height: 200%;
-                left: 0;
-                top: 0;
-              "
-            ></div>
-          </div>
-        </div>
+        <a id="insights" class="anchor"></a>
         <div
           class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom"
         >
-          <h1 class="h2">Insights</h1>
-          <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="d-flex align-items-center">
+          <a href="javascript:;" onClick="toggle('insights_toggle');"><h2 class="text-dark">Insights</h2></a>
+          <!-- <a class="ml-3" href="javascript:;" onClick="toggle('insights_toggle');">
+            <span id="insights_toggle_plus" class="hidden">
+              <i data-feather="plus-circle"></i>
+            </span>
+            <span id="insights_toggle_minus">
+              <i data-feather="minus-circle"></i>
+            </span>
+          </a> -->
+        </div>  
+        
+          <div class="btn-toolbar mb-2 mb-md-0" id="insights_toggle_minus">
             <div class="btn-group mr-2" data-toggle="buttons">
               {% for k, v in aggregations.items() %}
                 <a id="button_{{ k }}" onClick="show_chart('{{ k }}');"
@@ -389,7 +341,7 @@
 
         <input id="charts_selected" name="charts" type="hidden" value="{{ ','.join(aggs_checked) }}" />
 
-        <div class="card-group">
+        <div id="insights_toggle" class="card-group">
           {% for k, v in aggregations.items() %}
             <div id="card_{{ k }}" class="card border-light {% if not k in aggs_checked %} hidden {% endif%}">
               <div class="card-header">{{ k.title() }}</div>
@@ -405,36 +357,37 @@
 
         {% endif %}
         
-        <h2>Results</h2>
+        <a id="results" class="anchor"></a>
+        <a href="#results"><h2 class="text-dark">Results</h2></a>
         
       <div class="table-responsive">
         <table class="table table-striped" id="myTable" style="width: 100%">
           <thead class="thead-dark">
-            <tr>
-              <th class="col-sm-1">Search</th>
-              <th class="col-sm-1">Score</th>
-              <th class="col-sm-8">Item</th>
-              <th class="col-sm-2">Type</th>
+            <tr class="">
+              <th class="w-5">Search</th>
+              <th class="w-5">Score</th>
+              <th class="w-80">Item</th>
+              <th class="w-10">Type</th>
             </tr>
           </thead>
 
           <tbody>
             {% for item in items %}
             <tr>
-              <td class="col-sm-1">
+              <td>
                 {{ item.search }}
               </td>
-              <td class="col-sm-1">
+              <td>
                 {{ item.search_score }}
               </td>
-              <td class="col-sm-8">
+              <td>
                 <a
                       onClick="toggle('{{ item.index }}');"
                       href="javascript:;"
                       >{{ item.title }}</a
                     >
                     {% if item.missing|length > 0%} 
-                    <span class="text-danger">[missing {{ ' '.join(item.missing) }}]</span>
+                    <span class="text-danger">[missing: {{ ' '.join(item.missing) }}]</span>
                     {% endif %}
 
                   <div id="{{ item.index }}" class="hidden">
@@ -532,7 +485,7 @@
                     </div>
                   </div>
               </td>
-              <td class="col-sm-2">
+              <td>
                 <div class="container-fluid">
                   <div class="row">
                     {% if item.type is defined %}
