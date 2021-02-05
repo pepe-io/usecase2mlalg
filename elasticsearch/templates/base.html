@@ -95,6 +95,10 @@
         }
       }
 
+      .highlight {
+        background-color: yellow;
+      }
+
       .select-wrapper {
         margin: auto;
         max-width: 600px;
@@ -213,6 +217,7 @@
     <script>
       var charts_selected = {{ aggs_checked|tojson }};
       var engines_selected = {{ query_engines|tojson }};
+      var highlight_terms = {{ highlight_terms|tojson }};
     </script>
     {% block head %}{% endblock %}
   </head>
@@ -311,6 +316,23 @@
         }
         document.getElementById("engines").value = engines_selected;
         console.log("engine_toggled", engines_selected);
+      }
+
+      // highlight
+      function highlight_query(mode) {
+        var text = "Dogs";
+        var inputText = document.getElementById("result_items");
+        var innerHTML = inputText.innerHTML;
+        var index = innerHTML.indexOf(text);
+        if (index >= 0) {
+          innerHTML =
+            innerHTML.substring(0, index) +
+            "<span class='highlight'>" +
+            innerHTML.substring(index, index + text.length) +
+            "</span>" +
+            innerHTML.substring(index + text.length);
+          inputText.innerHTML = innerHTML;
+        }
       }
 
       // $(document).ready(function () {

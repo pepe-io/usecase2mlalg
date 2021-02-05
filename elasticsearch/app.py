@@ -44,6 +44,9 @@ options = {
     'ngrams': True,
     'scale_search_score': True,
     'max_items_aggregations': 10,
+    'default_stemming': True,
+    'default_penalize': True,
+    'default_highlight': False,
 }
 
 debug = {
@@ -57,10 +60,12 @@ debug = {
     'print_first_record': False,
     'print_aggregations': False,
     'print_filter_response': False,
+    'print_penalizer': False,
 }
 
 debug_view = {
     'print_fulltext': False,
+    'print_fulltext_stem': False,
 }
 
 # connect to ES on localhost on port 9200
@@ -85,6 +90,8 @@ if options['use4']:
     use4_end = time.time()
     print('loaded ('+str(round(use4_end-use4_start, 3))+'sec)')
     print('##################################################')
+else:
+    embed_use = None
 
 # load USE5_large model
 if options['use5']:
@@ -94,6 +101,8 @@ if options['use5']:
     use5_end = time.time()
     print('loaded ('+str(round(use5_end-use5_start, 3))+'sec)')
     print('##################################################')
+else:
+    embed_use_large = None
 
 # define default embedding
 embed = embed_use
@@ -558,7 +567,7 @@ def semSearch(es, query, tags, embedding, must, must_not={}, index=es_index, siz
     return res
 
 
-def format_result(res, query='', field='', scale=1, extra={}, res_filter=[], treshold=None, mode='gui'):
+def format_result(res, penalize=True, query='', field='', stem=True, scale=1, extra={}, res_filter=[], treshold=None, mode='gui'):
     '''
     parse formatting for response
     '''
@@ -589,14 +598,23 @@ def format_result(res, query='', field='', scale=1, extra={}, res_filter=[], tre
     ret['type'] = [x.replace('_score', '').title()
                    for x in types if ret[x] > 0]
 
-    # detect missing query items & recalculate
+    # penalizer
+    # detect missing query items & recalculate search_score
     ret['missing'] = []
-    q_terms = query.split(' ')
+    if stem:
+        q_terms = basic_clean(query)
+    else:
+        q_terms = query.split(' ')
+
+    if debug['print_penalizer']:
+        print('penalize:', q_terms)
+
     for q in q_terms:
         if ret[field].lower().find(q.lower()) == -1:
             ret['missing'].append(q)
-    ret['search_score'] = round((len(q_terms) - len(ret['missing'])
-                                 ) / len(q_terms) * ret['search_score'] / scale, 3)
+    if penalize:
+        ret['search_score'] = round(
+            (len(q_terms) - len(ret['missing'])) / len(q_terms) * ret['search_score'] / scale, 3)
 
     # add extras
     ret.update(extra)
@@ -724,6 +742,10 @@ def search(query='', options=options, guide=guide):
     aggregations = {}
     aggregations_raw = []
     aggs_checked = ['categories', 'tags', 'libs']
+    stemming = options['default_stemming']
+    penalize = options['default_penalize']
+    highlight = options['default_highlight']
+    model = options['default_embedding']
 
     ### POST / GUI ###
     if request.endpoint == 'gui':
@@ -825,6 +847,27 @@ def search(query='', options=options, guide=guide):
         if r.get('model'):
             model = r.get('model')
 
+        # switch stemming
+        if r.get('stemming'):
+            if r.get('stemming') == 'on':
+                stemming = True
+            else:
+                stemming = False
+
+        # switch penalization
+        if r.get('penalize'):
+            if r.get('penalize') == 'on':
+                penalize = True
+            else:
+                penalize = False
+
+        # switch highlight
+        if r.get('highlight'):
+            if r.get('highlight') == 'on':
+                highlight = True
+            else:
+                highlight = False
+
         # add boosting
         if r.get('boosting'):
             # api
@@ -887,13 +930,13 @@ def search(query='', options=options, guide=guide):
         # assing embedding
         vec = options['default_embedding']
         # load USE4 model
-        if model == 'use4':
+        if model == 'use4' and embed_use != None:
             embedding = embed_use
             vec = 'use4'
             html_embeddings['use4'] = 'checked'
             html_embeddings['use5'] = ''
         # load USE5_large model
-        elif model == 'use5':
+        elif model == 'use5' and embed_use_large != None:
             embedding = embed_use_large
             vec = 'use5'
             html_embeddings['use4'] = ''
@@ -908,6 +951,8 @@ def search(query='', options=options, guide=guide):
     print('search:', q)
     print('engines:', q_engines)
     print('field:', q_field)
+    print('stemming:', stemming)
+    print('penalize:', penalize)
     # print('model:', model)
     print('instance:', es_index)
     print('boosting:', boosting)
@@ -920,10 +965,19 @@ def search(query='', options=options, guide=guide):
         # perform keyword based search
         if 'k' in q_engines or 'b' in q_engines:
             # set tags to query
-            tags = {q_field: q}
+            if stemming:
+                stemmed = ' '.join(basic_clean(q))
+                tags = {q_field + '_stem': stemmed}
+                tags_boolean = {q_field + '_boolean_stem': stemmed}
+            else:
+                tags = {q_field: q}
+                tags_boolean = {q_field + '_boolean': q}
 
             # append match filters
             tags.update(match)
+            tags_boolean.update(match)
+
+            print(tags)
 
             # perform search (default scoring function: BM25 or TD*IDF)
             if 'k' in q_engines and options['search_engines']['keyword_default']:
@@ -943,7 +997,7 @@ def search(query='', options=options, guide=guide):
                              q_field[0], 'embedding': model}
                     # format record
                     item = format_result(
-                        hit, query=q, field=q_field, scale=scale, extra=extra, treshold=treshold, mode=request.endpoint)
+                        hit, penalize=penalize, query=q, field=q_field, stem=True, scale=scale, extra=extra, treshold=treshold, mode=request.endpoint)
                     # append record
                     if item != None:
                         items.append(item)
@@ -951,9 +1005,10 @@ def search(query='', options=options, guide=guide):
 
             # perform search (scoring function: boolean)
             if 'b' in q_engines and options['search_engines']['keyword_boolean']:
-                tags = {k+'_boolean': v for k, v in tags.items()}
+                # tags = {k+'_boolean': v for k, v in tags.items()}
+                print(tags_boolean)
                 res = keySearch(
-                    es, tags, size=size, must_not=match_not, boost=boosting, scale=True)
+                    es, tags_boolean, size=size, must_not=match_not, boost=boosting, scale=True)
 
                 # store aggregations
                 aggregations_raw.append(res['aggregations'])
@@ -968,7 +1023,7 @@ def search(query='', options=options, guide=guide):
                              q_field[0], 'embedding': model}
                     # format record
                     item = format_result(
-                        hit, query=q, field=q_field, scale=scale, extra=extra, treshold=treshold, mode=request.endpoint)
+                        hit, penalize=penalize, query=q, field=q_field, stem=True, scale=scale, extra=extra, treshold=treshold, mode=request.endpoint)
                     # append record
                     if item != None:
                         items.append(item)
@@ -993,7 +1048,7 @@ def search(query='', options=options, guide=guide):
                          q_field[0], 'embedding': model}
                 # format record
                 item = format_result(
-                    hit, query=q, field=q_field, extra=extra, treshold=treshold, mode=request.endpoint)
+                    hit, penalize=penalize, query=q, field=q_field, extra=extra, treshold=treshold, mode=request.endpoint)
                 # append record
                 if item != None:
                     items.append(item)
@@ -1059,6 +1114,10 @@ def search(query='', options=options, guide=guide):
             query_secondary=html_q_secondary,
             query_mode=html_mode,
             embeddings=html_embeddings,
+            stemming=stemming,
+            penalize=penalize,
+            highlight=highlight,
+            highlight_terms=basic_clean(q),
             items=items,
             runtime=dur,
             guides=guide,

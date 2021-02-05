@@ -114,35 +114,36 @@
                   />
                 </div>
               </li>
-              <li class="nav-item">
-                <div class="nav-link">
-                  <input
-                    class="form-control form-control-sm filter {% if match.kind|length > 0 %} is-valid {% endif %}"
-                    type="text"
-                    placeholder="kind"
-                    id="kind"
-                    name="kind"
-                    value="{{ match.kind }}"
-                    autocomplete="off"
-                    list="kind_list"
-                  />
-                </div>
-              </li>
-              <li class="nav-item">
-                <div class="nav-link">
-                  <input
-                    class="form-control form-control-sm filter {% if match.host|length > 0 %} is-valid {% endif %}"
-                    type="text"
-                    placeholder="source"
-                    id="host"
-                    name="host"
-                    value="{{ match.host }}"
-                    autocomplete="off"
-                    list="host_list"
-                  />
-                </div>
-              </li>
-              <div id="nav_more_filter" class="{% if match_not.tags|length == 0 and match_not.host|length == 0 and match_not.kind|length == 0 %} hidden {% endif %}">
+              
+              <div id="nav_more_filter" class="{% if match.kind|length == 0 and match.host|length == 0 and match_not.tags|length == 0 and match_not.host|length == 0 and match_not.kind|length == 0 %} hidden {% endif %}">
+                <li class="nav-item">
+                  <div class="nav-link">
+                    <input
+                      class="form-control form-control-sm filter {% if match.kind|length > 0 %} is-valid {% endif %}"
+                      type="text"
+                      placeholder="kind"
+                      id="kind"
+                      name="kind"
+                      value="{{ match.kind }}"
+                      autocomplete="off"
+                      list="kind_list"
+                    />
+                  </div>
+                </li>
+                <li class="nav-item">
+                  <div class="nav-link">
+                    <input
+                      class="form-control form-control-sm filter {% if match.host|length > 0 %} is-valid {% endif %}"
+                      type="text"
+                      placeholder="source"
+                      id="host"
+                      name="host"
+                      value="{{ match.host }}"
+                      autocomplete="off"
+                      list="host_list"
+                    />
+                  </div>
+                </li>
                 <li class="nav-item">
                   <div class="nav-link">
                     <input
@@ -265,12 +266,12 @@
                       autocomplete="off" {{ query_secondary['f'] }} /> Full Text
                     </label>
                     <label class="btn btn-outline-secondary">
-                      <input type="radio" name="field" id="title" class="toggle" value="title"
-                      autocomplete="off" {{ query_secondary['t'] }} /> Title
-                    </label>
-                    <label class="btn btn-outline-secondary">
                       <input type="radio" name="field" id="summarization" class="toggle" value="summarization"
                       autocomplete="off" {{ query_secondary['s'] }} /> Summary
+                    </label>
+                    <label class="btn btn-outline-secondary">
+                      <input type="radio" name="field" id="title" class="toggle" value="title"
+                      autocomplete="off" {{ query_secondary['t'] }} /> Title
                     </label>
                   </div>
                 </div>
@@ -289,6 +290,48 @@
                   </div>
                 </div>
               </li>
+              <li class="nav-item">
+                <div class="nav-link">
+                  <div class="btn-group btn-group-toggle btn-group-xs btn-group-block" data-toggle="buttons">
+                    <label class="btn btn-outline-secondary">
+                      <input type="radio" name="stemming" id="stemming_on" class="toggle" value="on"
+                      autocomplete="off" {% if stemming==True %}checked{% endif %} /> Stem Query
+                    </label>
+                    <label class="btn btn-outline-secondary">
+                      <input type="radio" name="stemming" id="stemming_off" class="toggle" value="off"
+                      autocomplete="off" {% if stemming==False %}checked{% endif %} /> Off
+                    </label>
+                  </div>
+                </div>
+              </li>
+              <li class="nav-item">
+                <div class="nav-link">
+                  <div class="btn-group btn-group-toggle btn-group-xs btn-group-block" data-toggle="buttons">
+                    <label class="btn btn-outline-secondary">
+                      <input type="radio" name="penalize" id="penalize_on" class="toggle" value="on"
+                      autocomplete="off" {% if penalize==True %}checked{% endif %} /> Penalize Query
+                    </label>
+                    <label class="btn btn-outline-secondary">
+                      <input type="radio" name="penalize" id="penalize_off" class="toggle" value="off"
+                      autocomplete="off" {% if penalize==False %}checked{% endif %} /> Off
+                    </label>
+                  </div>
+                </div>
+              </li>
+              <!-- <li class="nav-item">
+                <div class="nav-link">
+                  <div class="btn-group btn-group-toggle btn-group-xs btn-group-block" data-toggle="buttons">
+                    <label class="btn btn-outline-secondary">
+                      <input type="radio" onclick="highlight_query(true)" name="highlight" id="highlight_on" class="toggle" value="on"
+                      autocomplete="off" {% if highlight==True %}checked{% endif %} /> Highlight Query
+                    </label>
+                    <label class="btn btn-outline-secondary">
+                      <input type="radio" onclick="highlight_query(false)" name="highlight" id="highlight_off" class="toggle" value="off"
+                      autocomplete="off" {% if highlight==False %}checked{% endif %} /> Off
+                    </label>
+                  </div>
+                </div>
+              </li> -->
             </ul>
           </div>
           <div class="nav-item mt-5">
@@ -371,7 +414,7 @@
             </tr>
           </thead>
 
-          <tbody>
+          <tbody id='result_items'>
             {% for item in items %}
             <tr>
               <td>
@@ -387,7 +430,7 @@
                       >{{ item.title }}</a
                     >
                     {% if item.missing|length > 0%} 
-                    <span class="text-danger">[missing: {{ ' '.join(item.missing) }}]</span>
+                    <span class="{% if penalize==True %}text-danger{% else %}text-muted{% endif %}">[missing: {{ ' '.join(item.missing) }}]</span>
                     {% endif %}
 
                   <div id="{{ item.index }}" class="hidden">
@@ -406,6 +449,10 @@
                       {% if item.fulltext is defined and debug['print_fulltext'] %}
                         <div class="col-sm-2 font-weight-bold">fulltext</div>
                         <div class="col-sm-10">{{ item.fulltext }}</div>
+                      {% endif %}
+                      {% if item.fulltext_stem is defined and debug['print_fulltext_stem'] %}
+                        <div class="col-sm-2 font-weight-bold">fulltext stemmed</div>
+                        <div class="col-sm-10">{{ item.fulltext_stem }}</div>
                       {% endif %}
                     </div>
 

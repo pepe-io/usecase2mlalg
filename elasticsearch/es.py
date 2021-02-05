@@ -8,6 +8,10 @@ from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 import tensorflow as tf
 import tensorflow_hub as hub
+import nltk
+import re
+import unicodedata
+from nltk.corpus import stopwords
 
 # parse arguments
 print(len(sys.argv), sys.argv)
@@ -69,6 +73,15 @@ mapping = {
         "analyzer": "english",
         "similarity": "boolean"
     },
+    "title_stem": {
+        "type": "text",
+        "analyzer": "english"
+    },
+    "title_boolean_stem": {
+        "type": "text",
+        "analyzer": "english",
+        "similarity": "boolean"
+    },
     "title_vector_use4": {
         "type": "dense_vector",
         "dims": 512
@@ -82,6 +95,15 @@ mapping = {
         "analyzer": "english"
     },
     "summarization_boolean": {
+        "type": "text",
+        "analyzer": "english",
+        "similarity": "boolean"
+    },
+    "summarization_stem": {
+        "type": "text",
+        "analyzer": "english"
+    },
+    "summarization_boolean_stem": {
         "type": "text",
         "analyzer": "english",
         "similarity": "boolean"
@@ -103,6 +125,15 @@ mapping = {
         "analyzer": "english"
     },
     "fulltext_boolean": {
+        "type": "text",
+        "analyzer": "english",
+        "similarity": "boolean"
+    },
+    "fulltext_stem": {
+        "type": "text",
+        "analyzer": "english"
+    },
+    "fulltext_boolean_stem": {
         "type": "text",
         "analyzer": "english",
         "similarity": "boolean"
@@ -242,6 +273,22 @@ b = {
 }
 
 
+def basic_clean(text):
+    """
+    A simple function to clean up the data. All the words that
+    are not designated as a stop word is then lemmatized after
+    encoding and basic regex parsing are performed.
+    """
+    wnl = nltk.stem.WordNetLemmatizer()
+    stopwords = nltk.corpus.stopwords.words('english')
+    text = (unicodedata.normalize('NFKD', text)
+            .encode('ascii', 'ignore')
+            .decode('utf-8', 'ignore')
+            .lower())
+    words = re.sub(r'[^\w\s]', '', text).split()
+    return [wnl.lemmatize(word) for word in words if word not in stopwords]
+
+
 # up index
 if mode == '-up':
     # 400 caused by IndexAlreadyExistsException,
@@ -375,14 +422,6 @@ if mode == '-index' or mode == '-update':
                         record['summarization'] = raw['description'] if 'description' in raw else ''
                         record['summarization'] = raw['sum_nltk'] if 'sum_nltk' in raw and raw['sum_nltk'] != '' else record['summarization']
 
-                    # if not 'summarization_lemmatized' in record:
-                    #     record['summarization_lemmatized'] = raw['description_lemmatized'] if 'description_lemmatized' in raw else ''
-
-                    # print(record)
-                    # sys.exit()
-
-                    #print(i, record['link'])
-
                     # clear category and subcategory if below treshold
                     if 'category' in record:
                         if record['category_score'] < treshold:
@@ -417,10 +456,7 @@ if mode == '-index' or mode == '-update':
                             record.pop('date_scraped')
 
                     # create fulltext
-                    ft = record['summarization']
-
-                    # append title
-                    ft = record['title'] + '. ' + ft
+                    ft = record['title'] + '. ' + record['summarization']
 
                     # append subcategory
                     if 'subcategory' in record:
@@ -444,7 +480,7 @@ if mode == '-index' or mode == '-update':
                             s = ', '.join(record['tags_descriptive'])
                         else:
                             s = record['tags_descriptive']
-                        ft = ft + s
+                        ft = ft + ' ' + s
 
                     # store fulltext
                     record['fulltext'] = ft
@@ -460,6 +496,15 @@ if mode == '-index' or mode == '-update':
                             #print(i, record[i], type(record[i]))
                             record[r] = float(record[r])
 
+                    # create stemmed versions
+                    record['title_boolean_stem'] = record['title_stem'] = ' '.join(basic_clean(
+                        record['title']))
+                    record['summarization_boolean_stem'] = record['summarization_stem'] = ' '.join(basic_clean(
+                        record['summarization']))
+                    record['fulltext_boolean_stem'] = record['fulltext_stem'] = ' '.join(basic_clean(
+                        record['fulltext']))
+
+                    # create vectors
                     if mode == '-index':
                         # create vectors
                         vectorize = [
@@ -470,8 +515,7 @@ if mode == '-index' or mode == '-update':
                                 # print(embed)
                                 vec = tf.make_ndarray(tf.make_tensor_proto(
                                     embeddings[embed]([record[field]]))).tolist()[0]
-                                name = field.replace(
-                                    '_lemmatized', '')+'_vector_'+embed
+                                name = field+'_vector_'+embed
                                 record[name] = vec
 
                     # print(record)
@@ -507,7 +551,7 @@ if mode == '-index' or mode == '-update':
                         print('total:', i, '/ batch:', j, 'of',
                               len(files), '/ folder:', folder)
 
-                    if STORE_CHUNKS == True and i % 1000 == 0:
+                    if STORE_CHUNKS == True and i % 500 == 0:
                         print('')
                         print(i, 'storing items')
                         res = es.bulk(index=index, body=bulk)
