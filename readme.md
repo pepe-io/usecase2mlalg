@@ -51,8 +51,7 @@ the filter is a dictionary to equalize the tags out of different data-pools in a
 
 ### ./data/json
 
-(not available yet)  
-contain the final records (out of step [90]) before ingest
+contain the final records (out of step [90]) before vectorization & ingest
 
 ## elasticsearch
 
